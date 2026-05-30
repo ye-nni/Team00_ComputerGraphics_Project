@@ -1,25 +1,131 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-<meta http-equiv="Content-Type" content="text/html;charset=utf-8" >
-<title>Example1</title>
+    <meta http-equiv="Content-Type" content="text/html;charset=utf-8">
+    <title>Minecraft Hierarchical Model</title>
+    <style>
+        body {
+            margin: 0;
+            background: #151719;
+            color: #e8edf2;
+            font-family: Arial, Helvetica, sans-serif;
+        }
 
-<script id="vertex-shader" type="x-shader/x-vertex">
-</script>
+        .page {
+            width: min(1120px, calc(100vw - 32px));
+            margin: 24px auto;
+        }
 
-<script id="fragment-shader" type="x-shader/x-fragment">
+        h2 {
+            margin: 0 0 12px;
+            font-size: 24px;
+            font-weight: 700;
+        }
 
-</script>
+        #gl-canvas {
+            display: block;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            height: auto;
+            background: #9ecdf2;
+            border: 1px solid #30363d;
+        }
 
-<script type="text/javascript" src="../Common/webgl-utils.js"></script>
-<script type="text/javascript" src="../Common/initShaders.js"></script>
-<script type="text/javascript" src="../Common/MV.js"></script>
-<script type="text/javascript" src="example1.js"></script>
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            margin-top: 12px;
+        }
+
+        button {
+            padding: 8px 12px;
+            border: 1px solid #3c444d;
+            background: #24292f;
+            color: #e8edf2;
+            cursor: pointer;
+        }
+
+        p {
+            margin: 10px 0 0;
+            color: #b7c0ca;
+            font-size: 14px;
+        }
+    </style>
+    <script type="text/javascript" src="../Common/webgl-utils.js"></script>
+    <script type="text/javascript" src="../Common/initShaders.js"></script>
+    <script type="text/javascript" src="../Common/MV.js"></script>
+    <script type="text/javascript" src="minecraft.js"></script>
+
+    <script id="vertex-shader" type="x-shader/x-vertex">
+        attribute vec4 vPosition;
+        attribute vec3 vNormal;
+
+        uniform mat4 modelViewMatrix;
+        uniform mat4 projectionMatrix;
+        uniform vec4 uColor;
+        uniform vec4 lightPosition;
+
+        varying vec4 fColor;
+
+        void main()
+        {
+            vec3 pos = (modelViewMatrix * vPosition).xyz;
+            vec3 L;
+
+            if(lightPosition.w == 0.0) {
+                L = normalize(lightPosition.xyz);
+            }
+            else {
+                L = normalize(lightPosition.xyz - pos);
+            }
+
+            vec3 N = normalize((modelViewMatrix * vec4(vNormal, 0.0)).xyz);
+            float d = max(dot(L, N), 0.0);
+
+            vec4 ambient = 0.35 * uColor;
+            vec4 diffuse = 0.65 * d * uColor;
+
+            fColor = ambient + diffuse;
+            fColor.a = uColor.a;
+            gl_Position = projectionMatrix * modelViewMatrix * vPosition;
+        }
+    </script>
+
+    <script id="fragment-shader" type="x-shader/x-fragment">
+        precision mediump float;
+        varying vec4 fColor;
+
+        void main()
+        {
+            gl_FragColor = fColor;
+        }
+    </script>
 </head>
 
 <body>
-<canvas id="gl-canvas" width="1024" height="1024">
-Oops ... your browser doesn't support the HTML5 canvas element
-</canvas>
+    <main class="page">
+        <h2>Minecraft Hierarchical Model - Steve</h2>
+        <canvas id="gl-canvas" width="1280" height="720">
+            Oops ... your browser doesn't support the HTML5 canvas element
+        </canvas>
+
+        <div class="controls">
+            <button id="WalkButton">Walking Animation On/Off</button>
+            <button id="CrouchButton">Crouch On/Off</button>
+            <button id="RotateButton">Auto Rotate On/Off</button>
+            <button id="CameraModeButton">Camera Mode: Third Person</button>
+            <button id="CineLeftButton">Cine Look Left</button>
+            <button id="CineRightButton">Cine Look Right</button>
+            <button id="CineUpButton">Cine Look Up</button>
+            <button id="CineDownButton">Cine Look Down</button>
+            <button id="CineResetButton">Cine Look Reset</button>
+            <button id="ResetButton">Reset Pose</button>
+        </div>
+        <p>WASD: Move, Click Canvas + Mouse Move: Third Person Camera, Shift: Crouch, Space: Pause/Resume</p>
+    </main>
 </body>
+
 </html>
