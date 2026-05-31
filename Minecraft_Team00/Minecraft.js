@@ -59,6 +59,9 @@ var LEG_DEPTH = 0.4;
 var FOOT_DEPTH = 0.43;
 
 var JOINT_OVERLAP = 0.045;
+var CROUCH_JOINT_OVERLAP = 0.05;
+var CROUCH_HIP_OVERLAP = 0.06;
+var CROUCH_HEAD_OVERLAP = 0.045;
 var FRONT_PATCH_DEPTH = 0.003;
 var SIDE_PATCH_WIDTH = 0.003;
 var TOP_PATCH_HEIGHT = 0.003;
@@ -318,7 +321,8 @@ function initNodes(Id)
         break;
 
     case headId:
-        m = translate(0.0, TORSO_HEIGHT - 0.005, 0.0);
+        m = translate(0.0, TORSO_HEIGHT - 0.005 - (crouching ? CROUCH_HEAD_OVERLAP : 0.0), 0.0);
+        m = mult(m, rotate(crouching ? -bodyPitch : 0.0, 1, 0, 0));
         m = mult(m, rotate(theta[headId], 0, 1, 0));
         figure[headId] = createNode(m, head, leftUpperArmId, null);
         break;
@@ -358,13 +362,13 @@ function initNodes(Id)
         break;
 
     case leftUpperLegId:
-        m = translate(-LEG_WIDTH * 0.52, 0.0, 0.0);
+        m = translate(-LEG_WIDTH * 0.52, crouching ? CROUCH_HIP_OVERLAP : 0.0, 0.0);
         m = mult(m, rotate(theta[leftUpperLegId], 1, 0, 0));
         figure[leftUpperLegId] = createNode(m, upperLeg, rightUpperLegId, leftLowerLegId);
         break;
 
     case leftLowerLegId:
-        m = translate(0.0, -UPPER_LEG_HEIGHT + JOINT_OVERLAP, 0.0);
+        m = translate(0.0, -UPPER_LEG_HEIGHT + (crouching ? CROUCH_JOINT_OVERLAP : JOINT_OVERLAP), 0.0);
         m = mult(m, rotate(theta[leftLowerLegId], 1, 0, 0));
         figure[leftLowerLegId] = createNode(m, lowerLeg, null, leftFootId);
         break;
@@ -376,13 +380,13 @@ function initNodes(Id)
         break;
 
     case rightUpperLegId:
-        m = translate(LEG_WIDTH * 0.52, 0.0, 0.0);
+        m = translate(LEG_WIDTH * 0.52, crouching ? CROUCH_HIP_OVERLAP : 0.0, 0.0);
         m = mult(m, rotate(theta[rightUpperLegId], 1, 0, 0));
         figure[rightUpperLegId] = createNode(m, upperLeg, null, rightLowerLegId);
         break;
 
     case rightLowerLegId:
-        m = translate(0.0, -UPPER_LEG_HEIGHT + JOINT_OVERLAP, 0.0);
+        m = translate(0.0, -UPPER_LEG_HEIGHT + (crouching ? CROUCH_JOINT_OVERLAP : JOINT_OVERLAP), 0.0);
         m = mult(m, rotate(theta[rightLowerLegId], 1, 0, 0));
         figure[rightLowerLegId] = createNode(m, lowerLeg, null, rightFootId);
         break;
@@ -630,15 +634,15 @@ function updatePose()
     }
 
     if (crouching) {
-        crouchAmount = 0.30;
-        bodyShiftZ = -0.13;
-        bodyPitch += 9.0;
-        theta[leftUpperLegId] += -20.0;
-        theta[rightUpperLegId] += -20.0;
-        theta[leftLowerLegId] += 30.0;
-        theta[rightLowerLegId] += 30.0;
-        theta[leftFootId] += 6.0;
-        theta[rightFootId] += 6.0;
+        crouchAmount = 0.34;
+        bodyShiftZ = -0.22;
+        bodyPitch += 22.0;
+        theta[leftUpperLegId] += -26.0;
+        theta[rightUpperLegId] += -26.0;
+        theta[leftLowerLegId] += 18.0;
+        theta[rightLowerLegId] += 18.0;
+        theta[leftFootId] = -(bodyPitch + theta[leftUpperLegId] + theta[leftLowerLegId]);
+        theta[rightFootId] = -(bodyPitch + theta[rightUpperLegId] + theta[rightLowerLegId]);
         theta[leftUpperArmId] *= 0.4;
         theta[rightUpperArmId] *= 0.4;
     }
