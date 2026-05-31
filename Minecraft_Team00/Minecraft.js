@@ -93,6 +93,11 @@ var lastMouseX = 0;
 var lastMouseY = 0;
 var mouseSensitivity = 0.22;
 var cameraMode = "third";
+var gameState = "menu";
+var optionReturnState = "menu";
+var playerName = "Steve";
+var playerNameTag;
+var showPlayerNameTag = true;
 
 // 색상만 요청하신 사항에 맞춰 수정되었습니다.
 var colors = {
@@ -129,6 +134,7 @@ var vertices = [
 window.onload = function init()
 {
     canvas = document.getElementById("gl-canvas");
+    playerNameTag = document.getElementById("PlayerNameTag");
 
     gl = WebGLUtils.setupWebGL(canvas);
     if (!gl) { alert("WebGL isn't available"); }
@@ -184,9 +190,7 @@ window.onload = function init()
     };
 
     document.getElementById("CameraModeButton").onclick = function () {
-        cameraMode = (cameraMode === "third") ? "cinematic" : "third";
-        this.innerHTML = cameraMode === "third" ?
-            "Camera Mode: Third Person" : "Camera Mode: Cinematic";
+        toggleCameraMode();
     };
 
     document.getElementById("CineLeftButton").onclick = function () {
@@ -214,7 +218,78 @@ window.onload = function init()
         resetPose();
     };
 
+    document.getElementById("NicknameButton").onclick = function () {
+        var name = prompt("Enter Player Name", playerName);
+
+        if (name !== null) {
+            name = name.trim();
+            playerName = name.length > 0 ? name : "Steve";
+            document.getElementById("NicknameButton").textContent = "Player Name: " + playerName;
+            playerNameTag.textContent = playerName;
+            document.getElementById("MenuMessage").textContent = "Ready, " + playerName + ".";
+        }
+    };
+
+    document.getElementById("SinglePlayerButton").onclick = function () {
+        startGame();
+    };
+
+    document.getElementById("SettingsButton").onclick = function () {
+        openOptions("menu");
+    };
+
+    document.getElementById("QuitButton").onclick = function () {
+        document.getElementById("MenuMessage").textContent =
+            "Quit Game is disabled in browser mode.";
+    };
+
+    document.getElementById("OptionCameraButton").onclick = function () {
+        toggleCameraMode();
+        document.getElementById("OptionsMessage").textContent =
+            cameraMode === "third" ? "Third person camera selected." : "Cinematic camera selected.";
+    };
+
+    document.getElementById("OptionNameTagButton").onclick = function () {
+        showPlayerNameTag = !showPlayerNameTag;
+        syncNameTagButton();
+        document.getElementById("OptionsMessage").textContent =
+            showPlayerNameTag ? "Name tag enabled." : "Name tag disabled.";
+    };
+
+    document.getElementById("OptionResetButton").onclick = function () {
+        resetPose();
+        gameState = "options";
+        keys = {};
+        document.getElementById("OptionsMessage").textContent =
+            "Pose and start position reset.";
+    };
+
+    document.getElementById("OptionBackButton").onclick = function () {
+        closeOptions();
+    };
+
     window.addEventListener("keydown", function (event) {
+        if (event.code === "Escape") {
+            if (gameState === "playing") {
+                openOptions("playing");
+            }
+            else if (gameState === "menu") {
+                openOptions("menu");
+            }
+            else if (gameState === "options") {
+                closeOptions();
+            }
+            event.preventDefault();
+            return;
+        }
+
+        if (gameState !== "playing") {
+            if (isGameKey(event.code)) {
+                event.preventDefault();
+            }
+            return;
+        }
+
         keys[event.code] = true;
 
         if (event.code === "Space") {
@@ -249,12 +324,20 @@ window.onload = function init()
     });
 
     canvas.addEventListener("click", function () {
+        if (gameState !== "playing") {
+            return;
+        }
+
         if (canvas.requestPointerLock) {
             canvas.requestPointerLock();
         }
     });
 
     canvas.addEventListener("mousedown", function (event) {
+        if (gameState !== "playing") {
+            return;
+        }
+
         lastMouseX = event.clientX;
         lastMouseY = event.clientY;
         mouseDragging = !canvas.requestPointerLock;
@@ -278,7 +361,8 @@ window.onload = function init()
     window.addEventListener("mousemove", function (event) {
         var pointerLocked = (document.pointerLockElement === canvas);
 
-        if (cameraMode !== "third" || (!mouseOverCanvas && !mouseDragging && !pointerLocked)) {
+        if (gameState !== "playing" || cameraMode !== "third" ||
+            (!mouseOverCanvas && !mouseDragging && !pointerLocked)) {
             return;
         }
 
@@ -296,6 +380,102 @@ window.onload = function init()
 
     render();
 };
+
+function isGameKey(code)
+{
+    return code === "KeyW" || code === "KeyA" ||
+        code === "KeyS" || code === "KeyD" ||
+        code === "ArrowLeft" || code === "ArrowRight" ||
+        code === "Space" || code === "ShiftLeft" || code === "ShiftRight";
+}
+
+function startGame()
+{
+    resetPose();
+    gameState = "playing";
+    keys = {};
+    document.getElementById("MainMenu").style.display = "none";
+    document.getElementById("OptionsMenu").style.display = "none";
+}
+
+function openOptions(returnState)
+{
+    optionReturnState = returnState;
+    gameState = "options";
+    keys = {};
+    mouseDragging = false;
+
+    if (document.exitPointerLock && document.pointerLockElement === canvas) {
+        document.exitPointerLock();
+    }
+
+    document.getElementById("MainMenu").style.display = "none";
+    document.getElementById("OptionsMenu").style.display = "flex";
+    document.getElementById("OptionBackButton").textContent =
+        returnState === "menu" ? "Back to Menu" : "Back to Game";
+    syncCameraModeButtons();
+    syncNameTagButton();
+}
+
+function closeOptions()
+{
+    gameState = optionReturnState;
+    keys = {};
+    document.getElementById("OptionsMenu").style.display = "none";
+
+    if (gameState === "menu") {
+        document.getElementById("MainMenu").style.display = "flex";
+    }
+}
+
+function toggleCameraMode()
+{
+    cameraMode = (cameraMode === "third") ? "cinematic" : "third";
+    syncCameraModeButtons();
+}
+
+function syncCameraModeButtons()
+{
+    var label = cameraMode === "third" ?
+        "Camera Mode: Third Person" : "Camera Mode: Cinematic";
+    document.getElementById("CameraModeButton").textContent = label;
+    document.getElementById("OptionCameraButton").textContent = label;
+}
+
+function syncNameTagButton()
+{
+    document.getElementById("OptionNameTagButton").textContent =
+        showPlayerNameTag ? "Name Tag: On" : "Name Tag: Off";
+}
+
+function updatePlayerNameTag(viewMatrix)
+{
+    if (gameState !== "playing" || !showPlayerNameTag) {
+        playerNameTag.style.display = "none";
+        return;
+    }
+
+    var headTop = vec4(playerX, TORSO_HEIGHT + HEAD_HEIGHT + 0.20, playerZ, 1.0);
+    var eyePoint = mult(viewMatrix, headTop);
+    var clipPoint = mult(projectionMatrix, eyePoint);
+
+    if (clipPoint[3] <= 0.0) {
+        playerNameTag.style.display = "none";
+        return;
+    }
+
+    var ndcX = clipPoint[0] / clipPoint[3];
+    var ndcY = clipPoint[1] / clipPoint[3];
+
+    if (ndcX < -1.2 || ndcX > 1.2 || ndcY < -1.2 || ndcY > 1.2) {
+        playerNameTag.style.display = "none";
+        return;
+    }
+
+    playerNameTag.style.display = "block";
+    playerNameTag.style.left = ((ndcX * 0.5 + 0.5) * canvas.clientWidth) + "px";
+    playerNameTag.style.top = ((-ndcY * 0.5 + 0.5) * canvas.clientHeight) + "px";
+}
 
 function createNode(transform, render, sibling, child)
 {
@@ -660,7 +840,7 @@ function resetPose()
     cinematicYaw = -140.0;
     cinematicPitch = -16.0;
     cameraMode = "third";
-    document.getElementById("CameraModeButton").innerHTML = "Camera Mode: Third Person";
+    syncCameraModeButtons();
     playerX = 0.0;
     playerZ = 0.0;
     moving = false;
@@ -672,6 +852,11 @@ function resetPose()
 
 function updateMovement()
 {
+    if (gameState !== "playing") {
+        moving = false;
+        return;
+    }
+
     var x = (keys["KeyA"] ? 1.0 : 0.0) - (keys["KeyD"] ? 1.0 : 0.0);
     var z = (keys["KeyW"] ? 1.0 : 0.0) - (keys["KeyS"] ? 1.0 : 0.0);
 
@@ -760,6 +945,7 @@ function render()
     var up = vec3(0.0, 1.0, 0.0);
 
     modelViewMatrix = lookAt(eye, at, up);
+    updatePlayerNameTag(modelViewMatrix);
     modelViewMatrix = mult(modelViewMatrix, translate(playerX, 0.0, playerZ));
     traverse(torsoId);
 
