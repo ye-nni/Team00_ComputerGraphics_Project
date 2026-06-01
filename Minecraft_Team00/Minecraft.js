@@ -60,7 +60,7 @@ var FOOT_DEPTH = 0.43;
 
 var JOINT_OVERLAP = 0.045;
 var CROUCH_JOINT_OVERLAP = 0.05;
-var CROUCH_HIP_OVERLAP = 0.06;
+var CROUCH_HIP_OVERLAP = 0.26;
 var CROUCH_HEAD_OVERLAP = 0.045;
 var FRONT_PATCH_DEPTH = 0.003;
 var SIDE_PATCH_WIDTH = 0.003;
@@ -78,10 +78,17 @@ var bodyBounce = 0.0;
 var bodyPitch = 0.0;
 var bodyShiftZ = 0.0;
 var playerX = 0.0;
+var playerY = 0.0;
 var playerZ = 0.0;
 var moveSpeed = 0.055;
 var moving = false;
 var keys = {};
+var jumping = false;
+var jumpFrame = 0.0;
+var JUMP_PREP_DURATION = 8.0;
+var JUMP_AIR_DURATION = 30.0;
+var JUMP_DURATION = JUMP_PREP_DURATION + JUMP_AIR_DURATION;
+var JUMP_HEIGHT = 0.55;
 var cameraYaw = 180.0;
 var cameraPitch = 18.0;
 var cinematicEye = vec3(5.0, 2.8, 6.2);
@@ -98,6 +105,14 @@ var optionReturnState = "menu";
 var playerName = "Steve";
 var playerNameTag;
 var showPlayerNameTag = true;
+var armSwingFrame = 0.0;
+var armSwingActive = false;
+var armSwingHeld = false;
+var armSwingReturnFrame = 0.0;
+var armSwingUpperSideAngle = 0.0;
+var armSwingSideAngle = 0.0;
+var ARM_SWING_DURATION = 16.0;
+var ARM_SWING_RETURN_DURATION = 8.0;
 
 // 색상만 요청하신 사항에 맞춰 수정되었습니다.
 var colors = {
@@ -303,7 +318,7 @@ window.onload = function init()
 
         if (event.code === "Space") {
             if (!event.repeat) {
-                paused = !paused;
+                startJump();
             }
         }
         else if (event.code === "ArrowLeft") {
@@ -347,6 +362,10 @@ window.onload = function init()
             return;
         }
 
+        if (event.button === 0) {
+            startArmSwing();
+        }
+
         lastMouseX = event.clientX;
         lastMouseY = event.clientY;
         mouseDragging = !canvas.requestPointerLock;
@@ -363,7 +382,17 @@ window.onload = function init()
         mouseOverCanvas = false;
     });
 
-    window.addEventListener("mouseup", function () {
+    window.addEventListener("mouseup", function (event) {
+        if (event.button === 0) {
+            armSwingHeld = false;
+            armSwingReturnFrame = ARM_SWING_RETURN_DURATION;
+        }
+        mouseDragging = false;
+    });
+
+    document.addEventListener("pointerlockchange", function () {
+        lastMouseX = 0;
+        lastMouseY = 0;
         mouseDragging = false;
     });
 
@@ -381,6 +410,9 @@ window.onload = function init()
             (lastMouseY === 0 ? 0 : event.clientY - lastMouseY);
         lastMouseX = event.clientX;
         lastMouseY = event.clientY;
+
+        dx = Math.max(-40.0, Math.min(40.0, dx));
+        dy = Math.max(-40.0, Math.min(40.0, dy));
 
         cameraYaw -= dx * mouseSensitivity;
         cameraPitch -= dy * mouseSensitivity;
@@ -464,7 +496,7 @@ function updatePlayerNameTag(viewMatrix)
         return;
     }
 
-    var headTop = vec4(playerX, TORSO_HEIGHT + HEAD_HEIGHT + 0.20, playerZ, 1.0);
+    var headTop = vec4(playerX, playerY + TORSO_HEIGHT + HEAD_HEIGHT + 0.20, playerZ, 1.0);
     var eyePoint = mult(viewMatrix, headTop);
     var clipPoint = mult(projectionMatrix, eyePoint);
 
@@ -519,6 +551,7 @@ function initNodes(Id)
     case leftUpperArmId:
         m = translate(-(TORSO_WIDTH * 0.5 + ARM_WIDTH * 0.5), TORSO_HEIGHT, 0.0);
         m = mult(m, rotate(theta[leftUpperArmId], 1, 0, 0));
+        m = mult(m, rotate(armSwingUpperSideAngle, 0, 0, 1));
         figure[leftUpperArmId] = createNode(m, upperArm, rightUpperArmId, leftLowerArmId);
         break;
 
@@ -771,6 +804,7 @@ function updatePose()
     if (!paused) {
         time += 0.035;
         updateMovement();
+        updateJump();
 
         if (autoRotate) {
             cameraYaw += 0.25;
@@ -784,6 +818,8 @@ function updatePose()
     bodyBounce = 0.0;
     bodyPitch = 0.0;
     bodyShiftZ = 0.0;
+    armSwingUpperSideAngle = 0.0;
+    armSwingSideAngle = 0.0;
 
     if (walking && moving) {
         var phase = time * 3.95;
@@ -823,7 +859,7 @@ function updatePose()
     }
 
     if (crouching) {
-        crouchAmount = 0.34;
+        crouchAmount = 0.24;
         bodyShiftZ = -0.22;
         bodyPitch += 22.0;
         theta[leftUpperLegId] += -26.0;
@@ -838,6 +874,122 @@ function updatePose()
     else {
         crouchAmount = 0.0;
     }
+
+    applyJumpPose();
+    applyArmSwing();
+}
+
+function applyJumpPose()
+{
+    if (!jumping) {
+        return;
+    }
+
+    var prep = 0.0;
+    var landing = 0.0;
+    var airborne = 0.0;
+
+    if (jumpFrame < JUMP_PREP_DURATION) {
+        prep = Math.sin((jumpFrame / JUMP_PREP_DURATION) * Math.PI * 0.5);
+    }
+    else {
+        var airProgress = (jumpFrame - JUMP_PREP_DURATION) / JUMP_AIR_DURATION;
+        airborne = Math.sin(airProgress * Math.PI);
+        landing = Math.max(0.0, (airProgress - 0.72) / 0.28);
+    }
+
+    var kneeBend = prep * 22.0 + landing * 6.0;
+
+    bodyBounce -= prep * 0.08;
+    theta[leftUpperLegId] += -kneeBend * 0.45 + airborne * 4.0;
+    theta[rightUpperLegId] += -kneeBend * 0.45 + airborne * 4.0;
+    theta[leftLowerLegId] += kneeBend;
+    theta[rightLowerLegId] += kneeBend;
+    theta[leftFootId] += -12.0 * prep + 3.0 * landing;
+    theta[rightFootId] += -12.0 * prep + 3.0 * landing;
+}
+
+function startArmSwing()
+{
+    armSwingActive = true;
+    armSwingHeld = true;
+    armSwingReturnFrame = 0.0;
+}
+
+function applyArmSwing()
+{
+    if (!armSwingActive) {
+        return;
+    }
+
+    var blend = 1.0;
+    var progress = armSwingFrame / ARM_SWING_DURATION;
+    var sideSwing = Math.sin(progress * Math.PI * 2.0);
+    var chop = 0.5 - 0.5 * Math.cos(progress * Math.PI * 2.0);
+
+    if (!armSwingHeld) {
+        blend = Math.max(0.0, armSwingReturnFrame / ARM_SWING_RETURN_DURATION);
+    }
+
+    theta[leftUpperArmId] = theta[leftUpperArmId] * (1.0 - blend) +
+        ((-50.0 - 3.0 * chop) * blend);
+    theta[leftLowerArmId] = theta[leftLowerArmId] * (1.0 - blend) +
+        ((-5.0 - 24.0 * chop) * blend);
+    armSwingUpperSideAngle = sideSwing * 4.0 * blend;
+    armSwingSideAngle = 0.0;
+
+    if (!paused) {
+        if (armSwingHeld) {
+            armSwingFrame = (armSwingFrame + 1.0) % ARM_SWING_DURATION;
+        }
+        else {
+            armSwingReturnFrame -= 1.0;
+
+            if (armSwingReturnFrame <= 0.0) {
+                armSwingFrame = 0.0;
+                armSwingReturnFrame = 0.0;
+                armSwingActive = false;
+            }
+        }
+    }
+}
+
+function startJump()
+{
+    if (jumping || crouching) {
+        return;
+    }
+
+    jumping = true;
+    jumpFrame = 0.0;
+}
+
+function updateJump()
+{
+    if (!jumping) {
+        playerY = 0.0;
+        return;
+    }
+
+    var progress = jumpFrame / JUMP_DURATION;
+
+    if (jumpFrame < JUMP_PREP_DURATION) {
+        playerY = 0.0;
+    }
+    else {
+        var airProgress = (jumpFrame - JUMP_PREP_DURATION) / JUMP_AIR_DURATION;
+        playerY = Math.sin(airProgress * Math.PI) * JUMP_HEIGHT;
+    }
+
+    if (!paused) {
+        jumpFrame += 1.0;
+
+        if (jumpFrame >= JUMP_DURATION) {
+            jumping = false;
+            jumpFrame = 0.0;
+            playerY = 0.0;
+        }
+    }
 }
 
 function resetPose()
@@ -851,12 +1003,21 @@ function resetPose()
     cameraMode = "third";
     syncCameraModeButtons();
     playerX = 0.0;
+    playerY = 0.0;
     playerZ = 0.0;
     moving = false;
     walking = true;
     crouching = false;
     autoRotate = false;
     paused = false;
+    armSwingFrame = 0.0;
+    armSwingActive = false;
+    armSwingHeld = false;
+    armSwingReturnFrame = 0.0;
+    armSwingUpperSideAngle = 0.0;
+    armSwingSideAngle = 0.0;
+    jumping = false;
+    jumpFrame = 0.0;
 }
 
 function updateMovement()
@@ -957,7 +1118,7 @@ function render()
     drawGround();
     grassBlock(0, -0.294, -3.2);
     updatePlayerNameTag(modelViewMatrix);
-    modelViewMatrix = mult(modelViewMatrix, translate(playerX, 0.0, playerZ));
+    modelViewMatrix = mult(modelViewMatrix, translate(playerX, playerY, playerZ));
     traverse(torsoId);
 
     requestAnimFrame(render);
