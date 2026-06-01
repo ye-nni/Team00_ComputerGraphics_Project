@@ -94,6 +94,8 @@ var cameraPitch = 18.0;
 var cinematicEye = vec3(5.0, 2.8, 6.2);
 var cinematicYaw = -140.0;
 var cinematicPitch = -16.0;
+var cinematicMode = "fixed";
+var freeCameraSpeed = 0.10;
 var mouseDragging = false;
 var mouseOverCanvas = false;
 var lastMouseX = 0;
@@ -104,6 +106,8 @@ var gameState = "menu";
 var optionReturnState = "menu";
 var playerName = "Steve";
 var playerNameTag;
+var cameraModePopup;
+var cameraPopupTimer = 0;
 var showPlayerNameTag = true;
 var armSwingFrame = 0.0;
 var armSwingActive = false;
@@ -113,6 +117,15 @@ var armSwingUpperSideAngle = 0.0;
 var armSwingSideAngle = 0.0;
 var ARM_SWING_DURATION = 16.0;
 var ARM_SWING_RETURN_DURATION = 8.0;
+var targetBlock = {
+    x: 0.0,
+    y: -0.294,
+    z: -3.2,
+    hits: 0,
+    broken: false
+};
+var BLOCK_BREAK_HITS = 5;
+var BLOCK_INTERACTION_DISTANCE = 2.2;
 
 // 색상만 요청하신 사항에 맞춰 수정되었습니다.
 var colors = {
@@ -159,6 +172,7 @@ window.onload = function init()
 {
     canvas = document.getElementById("gl-canvas");
     playerNameTag = document.getElementById("PlayerNameTag");
+    cameraModePopup = document.getElementById("CameraModePopup");
 
     gl = WebGLUtils.setupWebGL(canvas);
     if (!gl) { alert("WebGL isn't available"); }
@@ -234,8 +248,7 @@ window.onload = function init()
     };
 
     document.getElementById("CineResetButton").onclick = function () {
-        cinematicYaw = -140.0;
-        cinematicPitch = -16.0;
+        resetCinematicCamera();
     };
 
     document.getElementById("ResetButton").onclick = function () {
@@ -262,11 +275,6 @@ window.onload = function init()
         openOptions("menu");
     };
 
-    document.getElementById("QuitButton").onclick = function () {
-        document.getElementById("MenuMessage").textContent =
-            "Quit Game is disabled in browser mode.";
-    };
-
     document.getElementById("OptionCameraButton").onclick = function () {
         toggleCameraMode();
         document.getElementById("OptionsMessage").textContent =
@@ -281,11 +289,15 @@ window.onload = function init()
     };
 
     document.getElementById("OptionResetButton").onclick = function () {
-        resetPose();
+        resetPlayerAndBlocks();
         gameState = "options";
         keys = {};
         document.getElementById("OptionsMessage").textContent =
-            "Pose and start position reset.";
+            "Player position and blocks reset.";
+    };
+
+    document.getElementById("OptionTitleButton").onclick = function () {
+        goToTitleScreen();
     };
 
     document.getElementById("OptionBackButton").onclick = function () {
@@ -302,6 +314,14 @@ window.onload = function init()
             }
             else if (gameState === "options") {
                 closeOptions();
+            }
+            event.preventDefault();
+            return;
+        }
+
+        if (event.code === "Tab") {
+            if (gameState === "playing" && cameraMode === "cinematic") {
+                toggleCinematicMode();
             }
             event.preventDefault();
             return;
@@ -334,7 +354,8 @@ window.onload = function init()
         if (event.code === "KeyW" || event.code === "KeyA" ||
             event.code === "KeyS" || event.code === "KeyD" ||
             event.code === "ArrowLeft" || event.code === "ArrowRight" ||
-            event.code === "Space") {
+            event.code === "KeyQ" || event.code === "KeyE" ||
+            event.code === "Space" || event.code === "Tab") {
             event.preventDefault();
         }
     });
@@ -364,6 +385,7 @@ window.onload = function init()
 
         if (event.button === 0) {
             startArmSwing();
+            tryHitTargetBlock();
         }
 
         lastMouseX = event.clientX;
@@ -399,7 +421,7 @@ window.onload = function init()
     window.addEventListener("mousemove", function (event) {
         var pointerLocked = (document.pointerLockElement === canvas);
 
-        if (gameState !== "playing" || cameraMode !== "third" ||
+        if (gameState !== "playing" ||
             (!mouseOverCanvas && !mouseDragging && !pointerLocked)) {
             return;
         }
@@ -414,9 +436,16 @@ window.onload = function init()
         dx = Math.max(-40.0, Math.min(40.0, dx));
         dy = Math.max(-40.0, Math.min(40.0, dy));
 
-        cameraYaw -= dx * mouseSensitivity;
-        cameraPitch -= dy * mouseSensitivity;
-        cameraPitch = Math.max(-8.0, Math.min(42.0, cameraPitch));
+        if (cameraMode === "third") {
+            cameraYaw -= dx * mouseSensitivity;
+            cameraPitch -= dy * mouseSensitivity;
+            cameraPitch = Math.max(-8.0, Math.min(42.0, cameraPitch));
+        }
+        else if (cameraMode === "cinematic" && cinematicMode === "free") {
+            cinematicYaw -= dx * mouseSensitivity;
+            cinematicPitch -= dy * mouseSensitivity;
+            cinematicPitch = Math.max(-80.0, Math.min(80.0, cinematicPitch));
+        }
     });
 
     render();
@@ -426,8 +455,10 @@ function isGameKey(code)
 {
     return code === "KeyW" || code === "KeyA" ||
         code === "KeyS" || code === "KeyD" ||
+        code === "KeyQ" || code === "KeyE" ||
         code === "ArrowLeft" || code === "ArrowRight" ||
-        code === "Space" || code === "ShiftLeft" || code === "ShiftRight";
+        code === "Space" || code === "Tab" ||
+        code === "ShiftLeft" || code === "ShiftRight";
 }
 
 function startGame()
@@ -469,18 +500,59 @@ function closeOptions()
     }
 }
 
+function goToTitleScreen()
+{
+    resetPlayerAndBlocks();
+    gameState = "menu";
+    optionReturnState = "menu";
+    keys = {};
+    mouseDragging = false;
+
+    if (document.exitPointerLock && document.pointerLockElement === canvas) {
+        document.exitPointerLock();
+    }
+
+    document.getElementById("OptionsMenu").style.display = "none";
+    document.getElementById("MainMenu").style.display = "flex";
+}
+
 function toggleCameraMode()
 {
     cameraMode = (cameraMode === "third") ? "cinematic" : "third";
     syncCameraModeButtons();
 }
 
+function toggleCinematicMode()
+{
+    cinematicMode = (cinematicMode === "fixed") ? "free" : "fixed";
+    showCameraModePopup(cinematicMode === "fixed" ? "Fixed Camera" : "Free Camera");
+    syncCameraModeButtons();
+}
+
+function showCameraModePopup(message)
+{
+    cameraModePopup.textContent = message;
+    cameraModePopup.style.display = "block";
+    cameraPopupTimer = 60;
+}
+
 function syncCameraModeButtons()
 {
-    var label = cameraMode === "third" ?
-        "Camera Mode: Third Person" : "Camera Mode: Cinematic";
+    var label = cameraMode === "third" ? "Camera Mode: Third Person" :
+        (cinematicMode === "fixed" ? "Camera Mode: Fixed" : "Camera Mode: Free");
     document.getElementById("CameraModeButton").textContent = label;
     document.getElementById("OptionCameraButton").textContent = label;
+}
+
+function updateCameraModePopup()
+{
+    if (cameraPopupTimer <= 0) {
+        cameraModePopup.style.display = "none";
+        return;
+    }
+
+    cameraPopupTimer -= 1;
+    cameraModePopup.style.display = "block";
 }
 
 function syncNameTagButton()
@@ -516,6 +588,34 @@ function updatePlayerNameTag(viewMatrix)
     playerNameTag.style.display = "block";
     playerNameTag.style.left = ((ndcX * 0.5 + 0.5) * canvas.clientWidth) + "px";
     playerNameTag.style.top = ((-ndcY * 0.5 + 0.5) * canvas.clientHeight) + "px";
+}
+
+function tryHitTargetBlock()
+{
+    if (targetBlock.broken) {
+        return;
+    }
+
+    var dx = playerX - targetBlock.x;
+    var dz = playerZ - targetBlock.z;
+    var distance = Math.sqrt(dx * dx + dz * dz);
+
+    if (distance > BLOCK_INTERACTION_DISTANCE) {
+        return;
+    }
+
+    targetBlock.hits += 1;
+
+    if (targetBlock.hits >= BLOCK_BREAK_HITS) {
+        targetBlock.broken = true;
+    }
+}
+
+function resetCinematicCamera()
+{
+    cinematicEye = vec3(5.0, 2.8, 6.2);
+    cinematicYaw = -140.0;
+    cinematicPitch = -16.0;
 }
 
 function createNode(transform, render, sibling, child)
@@ -804,6 +904,7 @@ function updatePose()
     if (!paused) {
         time += 0.035;
         updateMovement();
+        updateFreeCamera();
         updateJump();
 
         if (autoRotate) {
@@ -940,7 +1041,12 @@ function applyArmSwing()
 
     if (!paused) {
         if (armSwingHeld) {
-            armSwingFrame = (armSwingFrame + 1.0) % ARM_SWING_DURATION;
+            armSwingFrame += 1.0;
+
+            if (armSwingFrame >= ARM_SWING_DURATION) {
+                armSwingFrame = 0.0;
+                tryHitTargetBlock();
+            }
         }
         else {
             armSwingReturnFrame -= 1.0;
@@ -992,14 +1098,34 @@ function updateJump()
     }
 }
 
+function resetPlayerAndBlocks()
+{
+    playerX = 0.0;
+    playerY = 0.0;
+    playerZ = 0.0;
+    moving = false;
+    crouching = false;
+    jumping = false;
+    jumpFrame = 0.0;
+    armSwingFrame = 0.0;
+    armSwingActive = false;
+    armSwingHeld = false;
+    armSwingReturnFrame = 0.0;
+    armSwingUpperSideAngle = 0.0;
+    armSwingSideAngle = 0.0;
+    keys = {};
+    targetBlock.hits = 0;
+    targetBlock.broken = false;
+}
+
 function resetPose()
 {
     time = 0.0;
     bodyRotation = 180.0;
     cameraYaw = 180.0;
     cameraPitch = 18.0;
-    cinematicYaw = -140.0;
-    cinematicPitch = -16.0;
+    resetCinematicCamera();
+    cinematicMode = "fixed";
     cameraMode = "third";
     syncCameraModeButtons();
     playerX = 0.0;
@@ -1018,11 +1144,18 @@ function resetPose()
     armSwingSideAngle = 0.0;
     jumping = false;
     jumpFrame = 0.0;
+    targetBlock.hits = 0;
+    targetBlock.broken = false;
 }
 
 function updateMovement()
 {
     if (gameState !== "playing") {
+        moving = false;
+        return;
+    }
+
+    if (cameraMode === "cinematic" && cinematicMode === "free") {
         moving = false;
         return;
     }
@@ -1058,6 +1191,40 @@ function updateMovement()
     playerZ += moveZ * speed;
 }
 
+function updateFreeCamera()
+{
+    if (gameState !== "playing" || cameraMode !== "cinematic" || cinematicMode !== "free") {
+        return;
+    }
+
+    var x = (keys["KeyA"] ? 1.0 : 0.0) - (keys["KeyD"] ? 1.0 : 0.0);
+    var z = (keys["KeyW"] ? 1.0 : 0.0) - (keys["KeyS"] ? 1.0 : 0.0);
+    var y = (keys["KeyE"] ? 1.0 : 0.0) - (keys["KeyQ"] ? 1.0 : 0.0);
+
+    if (x === 0.0 && y === 0.0 && z === 0.0) {
+        return;
+    }
+
+    var yaw = radians(cinematicYaw);
+    var pitch = radians(cinematicPitch);
+    var forwardX = Math.sin(yaw) * Math.cos(pitch);
+    var forwardY = Math.sin(pitch);
+    var forwardZ = Math.cos(yaw) * Math.cos(pitch);
+    var rightX = Math.cos(yaw);
+    var rightZ = -Math.sin(yaw);
+    var length = Math.sqrt(x * x + y * y + z * z);
+
+    x /= length;
+    y /= length;
+    z /= length;
+
+    cinematicEye = vec3(
+        cinematicEye[0] + (forwardX * z + rightX * x) * freeCameraSpeed,
+        cinematicEye[1] + (forwardY * z + y) * freeCameraSpeed,
+        cinematicEye[2] + (forwardZ * z + rightZ * x) * freeCameraSpeed
+    );
+}
+
 function turnToward(current, target, maxStep)
 {
     current = normalizeAngle(current);
@@ -1078,6 +1245,7 @@ function render()
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     updatePose();
+    updateCameraModePopup();
 
     for (var i = 0; i < numNodes; i++) {
         initNodes(i);
@@ -1116,7 +1284,9 @@ function render()
 
     modelViewMatrix = lookAt(eye, at, up);
     drawGround();
-    grassBlock(0, -0.294, -3.2);
+    if (!targetBlock.broken) {
+        grassBlock(targetBlock.x, targetBlock.y, targetBlock.z);
+    }
     updatePlayerNameTag(modelViewMatrix);
     modelViewMatrix = mult(modelViewMatrix, translate(playerX, playerY, playerZ));
     traverse(torsoId);
