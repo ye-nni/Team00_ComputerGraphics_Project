@@ -1,25 +1,264 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-<meta http-equiv="Content-Type" content="text/html;charset=utf-8" >
-<title>Example1</title>
+    <meta http-equiv="Content-Type" content="text/html;charset=utf-8">
+    <title>Minecraft Hierarchical Model</title>
+    <style>
+        body {
+            margin: 0;
+            background: #151719;
+            color: #e8edf2;
+            font-family: Arial, Helvetica, sans-serif;
+        }
 
-<script id="vertex-shader" type="x-shader/x-vertex">
-</script>
+        .page {
+            width: min(1120px, calc(100vw - 32px));
+            margin: 24px auto;
+        }
 
-<script id="fragment-shader" type="x-shader/x-fragment">
+        h2 {
+            margin: 0 0 12px;
+            font-size: 24px;
+            font-weight: 700;
+        }
 
-</script>
+        #gl-canvas {
+            display: block;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            height: auto;
+            background: #9ecdf2;
+            border: 1px solid #30363d;
+        }
 
-<script type="text/javascript" src="../Common/webgl-utils.js"></script>
-<script type="text/javascript" src="../Common/initShaders.js"></script>
-<script type="text/javascript" src="../Common/MV.js"></script>
-<script type="text/javascript" src="example1.js"></script>
+        .game-shell {
+            position: relative;
+        }
+
+        .main-menu {
+            position: absolute;
+            inset: 1px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            background:
+                linear-gradient(rgba(70, 96, 124, 0.20), rgba(14, 19, 24, 0.42)),
+                repeating-linear-gradient(45deg,
+                    rgba(255, 255, 255, 0.08) 0,
+                    rgba(255, 255, 255, 0.08) 8px,
+                    rgba(0, 0, 0, 0.06) 8px,
+                    rgba(0, 0, 0, 0.06) 16px);
+            text-align: center;
+        }
+
+        .options-menu {
+            display: none;
+            background:
+                linear-gradient(rgba(20, 24, 28, 0.72), rgba(20, 24, 28, 0.82)),
+                repeating-linear-gradient(45deg,
+                    rgba(255, 255, 255, 0.06) 0,
+                    rgba(255, 255, 255, 0.06) 8px,
+                    rgba(0, 0, 0, 0.08) 8px,
+                    rgba(0, 0, 0, 0.08) 16px);
+        }
+
+        .menu-title {
+            margin: 0 0 18px;
+            color: #f2f2f2;
+            font-size: clamp(38px, 8vw, 86px);
+            font-weight: 900;
+            line-height: 0.85;
+            letter-spacing: 0;
+            text-shadow:
+                4px 4px 0 #111,
+                7px 7px 0 rgba(0, 0, 0, 0.45);
+        }
+
+        .menu-subtitle {
+            display: block;
+            margin-top: 6px;
+            color: #d5d1ca;
+            font-size: clamp(18px, 3vw, 34px);
+            text-shadow: 3px 3px 0 #111;
+        }
+
+        .menu-buttons {
+            width: min(520px, 74%);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .menu-button {
+            min-height: 46px;
+            border: 3px solid #1b1b1b;
+            box-shadow: inset 3px 3px rgba(255, 255, 255, 0.28),
+                inset -3px -3px rgba(0, 0, 0, 0.35);
+            background: #777;
+            color: #f3f3f3;
+            font-size: clamp(17px, 2.5vw, 26px);
+            text-shadow: 2px 2px #202020;
+        }
+
+        .menu-button:hover {
+            background: #8b8b8b;
+        }
+
+        .menu-message {
+            min-height: 18px;
+            margin: 4px 0 0;
+            color: #fff46a;
+            font-size: 14px;
+            text-shadow: 2px 2px #111;
+        }
+
+        .player-name-tag {
+            position: absolute;
+            display: none;
+            min-width: 88px;
+            padding: 5px 10px;
+            border: 2px solid rgba(20, 20, 20, 0.85);
+            background: rgba(77, 77, 77, 0.48);
+            color: #f4f4f4;
+            font-size: 14px;
+            font-weight: 700;
+            line-height: 1;
+            text-align: center;
+            text-shadow: 1px 1px #000;
+            pointer-events: none;
+            transform: translate(-50%, -100%);
+            box-shadow: inset 1px 1px rgba(255, 255, 255, 0.25),
+                inset -1px -1px rgba(0, 0, 0, 0.45);
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            margin-top: 12px;
+        }
+
+        button {
+            padding: 8px 12px;
+            border: 1px solid #3c444d;
+            background: #24292f;
+            color: #e8edf2;
+            cursor: pointer;
+        }
+
+        p {
+            margin: 10px 0 0;
+            color: #b7c0ca;
+            font-size: 14px;
+        }
+    </style>
+    <script type="text/javascript" src="../Common/webgl-utils.js"></script>
+    <script type="text/javascript" src="../Common/initShaders.js"></script>
+    <script type="text/javascript" src="../Common/MV.js"></script>
+    <script type="text/javascript" src="Minecraft.js"></script>
+
+    <script id="vertex-shader" type="x-shader/x-vertex">
+        attribute vec4 vPosition;
+        attribute vec3 vNormal;
+
+        uniform mat4 modelViewMatrix;
+        uniform mat4 projectionMatrix;
+        uniform vec4 uColor;
+        uniform vec4 lightPosition;
+
+        varying vec4 fColor;
+
+        void main()
+        {
+            vec3 pos = (modelViewMatrix * vPosition).xyz;
+            vec3 L;
+
+            if(lightPosition.w == 0.0) {
+                L = normalize(lightPosition.xyz);
+            }
+            else {
+                L = normalize(lightPosition.xyz - pos);
+            }
+
+            vec3 N = normalize((modelViewMatrix * vec4(vNormal, 0.0)).xyz);
+            float d = max(dot(L, N), 0.0);
+
+            vec4 ambient = 0.35 * uColor;
+            vec4 diffuse = 0.65 * d * uColor;
+
+            fColor = ambient + diffuse;
+            fColor.a = uColor.a;
+            gl_Position = projectionMatrix * modelViewMatrix * vPosition;
+        }
+    </script>
+
+    <script id="fragment-shader" type="x-shader/x-fragment">
+        precision mediump float;
+        varying vec4 fColor;
+
+        void main()
+        {
+            gl_FragColor = fColor;
+        }
+    </script>
 </head>
 
 <body>
-<canvas id="gl-canvas" width="1024" height="1024">
-Oops ... your browser doesn't support the HTML5 canvas element
-</canvas>
+    <main class="page">
+        <h2>Minecraft Hierarchical Model - Steve</h2>
+        <div class="game-shell">
+            <canvas id="gl-canvas" width="1280" height="720">
+                Oops ... your browser doesn't support the HTML5 canvas element
+            </canvas>
+            <div id="PlayerNameTag" class="player-name-tag">Steve</div>
+
+            <div id="MainMenu" class="main-menu">
+                <h1 class="menu-title">
+                    MINECRAFT
+                    <span class="menu-subtitle">Team Project</span>
+                </h1>
+                <div class="menu-buttons">
+                    <button id="NicknameButton" class="menu-button">Player Name: Steve</button>
+                    <button id="SinglePlayerButton" class="menu-button">Single Player</button>
+                    <button id="SettingsButton" class="menu-button">Options...</button>
+                    <button id="QuitButton" class="menu-button">Quit Game</button>
+                </div>
+                <p id="MenuMessage" class="menu-message"></p>
+            </div>
+
+            <div id="OptionsMenu" class="main-menu options-menu">
+                <h1 class="menu-title">
+                    OPTIONS
+                    <span class="menu-subtitle">Steve Controls</span>
+                </h1>
+                <div class="menu-buttons">
+                    <button id="OptionCameraButton" class="menu-button">Camera Mode: Third Person</button>
+                    <button id="OptionNameTagButton" class="menu-button">Name Tag: On</button>
+                    <button id="OptionResetButton" class="menu-button">Reset Pose / Start Position</button>
+                    <button id="OptionBackButton" class="menu-button">Back to Game</button>
+                </div>
+                <p id="OptionsMessage" class="menu-message">ESC: Back</p>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="WalkButton">Walking Animation On/Off</button>
+            <button id="CrouchButton">Crouch On/Off</button>
+            <button id="RotateButton">Auto Rotate On/Off</button>
+            <button id="CameraModeButton">Camera Mode: Third Person</button>
+            <button id="CineLeftButton">Cine Look Left</button>
+            <button id="CineRightButton">Cine Look Right</button>
+            <button id="CineUpButton">Cine Look Up</button>
+            <button id="CineDownButton">Cine Look Down</button>
+            <button id="CineResetButton">Cine Look Reset</button>
+            <button id="ResetButton">Reset Pose</button>
+        </div>
+        <p>WASD: Move, Click Canvas + Mouse Move: Third Person Camera, Shift: Crouch, Space: Pause/Resume</p>
+    </main>
 </body>
+
 </html>
