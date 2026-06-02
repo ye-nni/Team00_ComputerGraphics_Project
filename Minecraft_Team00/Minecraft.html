@@ -30,15 +30,18 @@
             height: auto;
             background: #9ecdf2;
             border: 1px solid #30363d;
+            box-sizing: border-box;
         }
 
         .game-shell {
             position: relative;
+            overflow: hidden;
         }
 
         .main-menu {
             position: absolute;
-            inset: 1px;
+            inset: 0;
+            box-sizing: border-box;
             display: flex;
             flex-direction: column;
             align-items: center;

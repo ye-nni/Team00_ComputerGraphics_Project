@@ -78,6 +78,15 @@ var paused = false;
 var time = 0.0;
 var lastFrameTime = 0.0;
 var frameScale = 1.0;
+var canvasDisplayWidth = 0;
+var canvasDisplayHeight = 0;
+var sceneLightingMode = "";
+var sceneClearMode = "";
+var currentDrawColor = null;
+var cameraPopupVisible = false;
+var playerNameTagVisible = false;
+var lastNameTagLeft = "";
+var lastNameTagTop = "";
 var bodyRotation = 180.0;
 var crouchAmount = 0.0;
 var bodyBounce = 0.0;
@@ -198,6 +207,7 @@ var colors = {
     blueDia: vec4(0.15, 0.80, 0.80, 1.0),
     blueDark: vec4(0.13, 0.58, 0.57, 1.0),
     crack: vec4(0.08, 0.08, 0.09, 1.0),
+    black: vec4(0.0, 0.0, 0.0, 1.0),
     creeperGreen: vec4(0.25, 0.65, 0.19, 1.0),
     creeperFlash: vec4(0.96, 0.96, 0.90, 1.0),
     explosionWhite: vec4(0.94, 0.94, 0.90, 0.72),
@@ -669,12 +679,19 @@ function syncCameraModeButtons()
 function updateCameraModePopup()
 {
     if (cameraPopupTimer <= 0) {
-        cameraModePopup.style.display = "none";
+        if (cameraPopupVisible) {
+            cameraModePopup.style.display = "none";
+            cameraPopupVisible = false;
+        }
         return;
     }
 
     cameraPopupTimer -= frameScale;
-    cameraModePopup.style.display = "block";
+
+    if (!cameraPopupVisible) {
+        cameraModePopup.style.display = "block";
+        cameraPopupVisible = true;
+    }
 }
 
 function syncNameTagButton()
@@ -738,7 +755,7 @@ function updateNightCreeperSpawn()
 function updatePlayerNameTag(viewMatrix)
 {
     if (gameState !== "playing" || !showPlayerNameTag) {
-        playerNameTag.style.display = "none";
+        hidePlayerNameTag();
         return;
     }
 
@@ -747,7 +764,7 @@ function updatePlayerNameTag(viewMatrix)
     var clipPoint = mult(projectionMatrix, eyePoint);
 
     if (clipPoint[3] <= 0.0) {
-        playerNameTag.style.display = "none";
+        hidePlayerNameTag();
         return;
     }
 
@@ -755,13 +772,39 @@ function updatePlayerNameTag(viewMatrix)
     var ndcY = clipPoint[1] / clipPoint[3];
 
     if (ndcX < -1.2 || ndcX > 1.2 || ndcY < -1.2 || ndcY > 1.2) {
-        playerNameTag.style.display = "none";
+        hidePlayerNameTag();
         return;
     }
 
-    playerNameTag.style.display = "block";
-    playerNameTag.style.left = ((ndcX * 0.5 + 0.5) * canvas.clientWidth) + "px";
-    playerNameTag.style.top = ((-ndcY * 0.5 + 0.5) * canvas.clientHeight) + "px";
+    showPlayerNameTagAt(
+        ((ndcX * 0.5 + 0.5) * canvasDisplayWidth) + "px",
+        ((-ndcY * 0.5 + 0.5) * canvasDisplayHeight) + "px");
+}
+
+function hidePlayerNameTag()
+{
+    if (playerNameTagVisible) {
+        playerNameTag.style.display = "none";
+        playerNameTagVisible = false;
+    }
+}
+
+function showPlayerNameTagAt(left, top)
+{
+    if (!playerNameTagVisible) {
+        playerNameTag.style.display = "block";
+        playerNameTagVisible = true;
+    }
+
+    if (lastNameTagLeft !== left) {
+        playerNameTag.style.left = left;
+        lastNameTagLeft = left;
+    }
+
+    if (lastNameTagTop !== top) {
+        playerNameTag.style.top = top;
+        lastNameTagTop = top;
+    }
 }
 
 function tryHitTargetBlock()
@@ -1038,7 +1081,10 @@ function drawBlock(width, height, depth, color, x, y, z)
     instanceMatrix = mult(instanceMatrix, scale4(width, height, depth));
 
     gl.uniformMatrix4fv(modelViewMatrixLoc, false, flatten(instanceMatrix));
-    gl.uniform4fv(colorLoc, flatten(color));
+    if (currentDrawColor !== color) {
+        gl.uniform4fv(colorLoc, flatten(color));
+        currentDrawColor = color;
+    }
     gl.drawArrays(gl.TRIANGLES, 0, NumVertices);
 }
 
@@ -1477,6 +1523,14 @@ function updateFrameScale()
 
 function applySceneLighting()
 {
+    var mode = nightMode ? "night" : "day";
+
+    if (sceneLightingMode === mode) {
+        return;
+    }
+
+    sceneLightingMode = mode;
+
     if (nightMode) {
         gl.uniform4fv(lightPositionLoc, flatten(vec4(-2.2, 5.8, -3.2, 0.0)));
         gl.uniform1f(ambientStrengthLoc, 0.42);
@@ -1491,16 +1545,28 @@ function applySceneLighting()
     }
 }
 
-function render()
+function applySceneClearColor()
 {
-    updateFrameScale();
-    resizeCanvas();
+    var mode = nightMode ? "night" : "day";
+
+    if (sceneClearMode === mode) {
+        return;
+    }
+
+    sceneClearMode = mode;
+
     if (nightMode) {
         gl.clearColor(0.035, 0.055, 0.12, 1.0);
     }
     else {
         gl.clearColor(0.64, 0.82, 0.98, 1.0);
     }
+}
+
+function render()
+{
+    updateFrameScale();
+    applySceneClearColor();
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     applySceneLighting();
 
@@ -1565,7 +1631,7 @@ function render()
     }
 
     if (steveFallen) {
-        playerNameTag.style.display = "none";
+        hidePlayerNameTag();
     }
     else {
         updatePlayerNameTag(modelViewMatrix);
@@ -1584,6 +1650,9 @@ function resizeCanvas()
 {
     var displayWidth = canvas.clientWidth;
     var displayHeight = canvas.clientHeight;
+
+    canvasDisplayWidth = displayWidth;
+    canvasDisplayHeight = displayHeight;
 
     if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
         canvas.width = displayWidth;
@@ -1645,17 +1714,15 @@ function grassTile(x, z)
     drawTopPatch(0.2, 0.2, colors.greenLight, x, z+0.4, y+0.8); // 초록 무늬
     drawTopPatch(0.2, 0.2, colors.greenLight, x-0.2, z+0.2, y+0.8); // 초록 무늬
     drawTopPatch(0.2, 0.2, colors.greenLight, x-0.6, z-0.4, y+0.8); // 초록 무늬
-    
+
     drawTopPatch(0.2, 0.2, colors.greenDark, x+0.4, z, y+0.8); // 초록 무늬
-    drawTopPatch(0.2, 0.2, colors.greenDark, x+0.4, z+0.3, y+0.8); // 초록 무늬
     drawTopPatch(0.2, 0.2, colors.greenDark, x-0.2, z-0.6, y+0.8); // 초록 무늬
-    drawTopPatch(0.2, 0.2, colors.greenDark, x-0.4, z+0.6, y+0.8); // 초록 무늬
     // width, depth, color, x, z, y
 }
 
 function drawGround()
 {
-    var tileCount = 20;
+    var tileCount = 18;
     var tileSize = 1.6;
     var groundStart = -0.5 * (tileCount - 1) * tileSize;
 
@@ -1980,9 +2047,9 @@ function creeperModel(x, y, z)
     drawBlock(0.96, 0.72, 0.48, bodyColor, 0, -2.28, 0.48);
     drawBlock(0.96, 0.72, 0.48, bodyColor, 0, -2.28, -0.48);
 
-    drawBackPatch(0.24, 0.24, vec4(0, 0, 0, 1.0), -0.24, 0.12, 0.48);
-    drawBackPatch(0.24, 0.24, vec4(0, 0, 0, 1.0), 0.24, 0.12, 0.48);
-    drawBackPatch(0.24, 0.24, vec4(0, 0, 0, 1.0), 0, -0.24, 0.48);
+    drawBackPatch(0.24, 0.24, colors.black, -0.24, 0.12, 0.48);
+    drawBackPatch(0.24, 0.24, colors.black, 0.24, 0.12, 0.48);
+    drawBackPatch(0.24, 0.24, colors.black, 0, -0.24, 0.48);
 
     modelViewMatrix = stack.pop();
 }
