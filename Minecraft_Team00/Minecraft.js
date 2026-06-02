@@ -72,6 +72,8 @@ var crouching = false;
 var autoRotate = false;
 var paused = false;
 var time = 0.0;
+var lastFrameTime = 0.0;
+var frameScale = 1.0;
 var bodyRotation = 180.0;
 var crouchAmount = 0.0;
 var bodyBounce = 0.0;
@@ -253,6 +255,14 @@ window.onload = function init()
 
     document.getElementById("ResetButton").onclick = function () {
         resetPose();
+    };
+
+    document.getElementById("GuideToggleButton").onclick = function () {
+        toggleBottomToolPanel("GuidePanel");
+    };
+
+    document.getElementById("DevToggleButton").onclick = function () {
+        toggleBottomToolPanel("DevPanel");
     };
 
     document.getElementById("NicknameButton").onclick = function () {
@@ -500,6 +510,21 @@ function closeOptions()
     }
 }
 
+function toggleBottomToolPanel(panelId)
+{
+    var guidePanel = document.getElementById("GuidePanel");
+    var devPanel = document.getElementById("DevPanel");
+    var targetPanel = document.getElementById(panelId);
+    var shouldOpen = targetPanel.style.display !== "block";
+
+    guidePanel.style.display = "none";
+    devPanel.style.display = "none";
+
+    if (shouldOpen) {
+        targetPanel.style.display = "block";
+    }
+}
+
 function goToTitleScreen()
 {
     resetPlayerAndBlocks();
@@ -551,7 +576,7 @@ function updateCameraModePopup()
         return;
     }
 
-    cameraPopupTimer -= 1;
+    cameraPopupTimer -= frameScale;
     cameraModePopup.style.display = "block";
 }
 
@@ -902,13 +927,13 @@ function drawTopPatch(width, depth, color, x, z, y)
 function updatePose()
 {
     if (!paused) {
-        time += 0.035;
+        time += 0.035 * frameScale;
         updateMovement();
         updateFreeCamera();
         updateJump();
 
         if (autoRotate) {
-            cameraYaw += 0.25;
+            cameraYaw += 0.25 * frameScale;
         }
     }
 
@@ -1041,7 +1066,7 @@ function applyArmSwing()
 
     if (!paused) {
         if (armSwingHeld) {
-            armSwingFrame += 1.0;
+            armSwingFrame += frameScale;
 
             if (armSwingFrame >= ARM_SWING_DURATION) {
                 armSwingFrame = 0.0;
@@ -1049,7 +1074,7 @@ function applyArmSwing()
             }
         }
         else {
-            armSwingReturnFrame -= 1.0;
+            armSwingReturnFrame -= frameScale;
 
             if (armSwingReturnFrame <= 0.0) {
                 armSwingFrame = 0.0;
@@ -1088,7 +1113,7 @@ function updateJump()
     }
 
     if (!paused) {
-        jumpFrame += 1.0;
+        jumpFrame += frameScale;
 
         if (jumpFrame >= JUMP_DURATION) {
             jumping = false;
@@ -1170,7 +1195,7 @@ function updateMovement()
     }
 
     if (z !== 0.0 && x !== 0.0) {
-        bodyRotation = normalizeAngle(bodyRotation + x * z * 2.2);
+        bodyRotation = normalizeAngle(bodyRotation + x * z * 2.2 * frameScale);
         x = 0.0;
     }
 
@@ -1187,8 +1212,8 @@ function updateMovement()
 
     var moveX = forwardX * z + rightX * x;
     var moveZ = forwardZ * z + rightZ * x;
-    playerX += moveX * speed;
-    playerZ += moveZ * speed;
+    playerX += moveX * speed * frameScale;
+    playerZ += moveZ * speed * frameScale;
 }
 
 function updateFreeCamera()
@@ -1219,9 +1244,9 @@ function updateFreeCamera()
     z /= length;
 
     cinematicEye = vec3(
-        cinematicEye[0] + (forwardX * z + rightX * x) * freeCameraSpeed,
-        cinematicEye[1] + (forwardY * z + y) * freeCameraSpeed,
-        cinematicEye[2] + (forwardZ * z + rightZ * x) * freeCameraSpeed
+        cinematicEye[0] + (forwardX * z + rightX * x) * freeCameraSpeed * frameScale,
+        cinematicEye[1] + (forwardY * z + y) * freeCameraSpeed * frameScale,
+        cinematicEye[2] + (forwardZ * z + rightZ * x) * freeCameraSpeed * frameScale
     );
 }
 
@@ -1239,8 +1264,26 @@ function normalizeAngle(angle)
     return ((angle % 360.0) + 360.0) % 360.0;
 }
 
+function updateFrameScale()
+{
+    var now = (window.performance && window.performance.now) ?
+        window.performance.now() : Date.now();
+
+    if (lastFrameTime === 0.0) {
+        lastFrameTime = now;
+        frameScale = 1.0;
+        return;
+    }
+
+    var deltaSeconds = (now - lastFrameTime) / 1000.0;
+    lastFrameTime = now;
+
+    frameScale = Math.max(0.25, Math.min(2.5, deltaSeconds * 60.0));
+}
+
 function render()
 {
+    updateFrameScale();
     resizeCanvas();
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 

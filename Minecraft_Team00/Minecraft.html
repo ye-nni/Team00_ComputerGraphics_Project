@@ -3,7 +3,7 @@
 
 <head>
     <meta http-equiv="Content-Type" content="text/html;charset=utf-8">
-    <title>Minecraft Hierarchical Model</title>
+    <title>Minecraft WebGL Simulation</title>
     <style>
         body {
             margin: 0;
@@ -54,6 +54,24 @@
             text-align: center;
         }
 
+        #MainMenu {
+            gap: 18px;
+            background:
+                radial-gradient(circle at 50% 24%,
+                    rgba(255, 255, 255, 0.22) 0,
+                    rgba(255, 255, 255, 0.10) 18%,
+                    rgba(255, 255, 255, 0.00) 43%),
+                radial-gradient(circle at 18% 18%,
+                    rgba(150, 210, 255, 0.22) 0,
+                    rgba(150, 210, 255, 0.00) 34%),
+                linear-gradient(rgba(70, 96, 124, 0.18), rgba(14, 19, 24, 0.46)),
+                repeating-linear-gradient(45deg,
+                    rgba(255, 255, 255, 0.08) 0,
+                    rgba(255, 255, 255, 0.08) 8px,
+                    rgba(0, 0, 0, 0.06) 8px,
+                    rgba(0, 0, 0, 0.06) 16px);
+        }
+
         .options-menu {
             display: none;
             background:
@@ -82,12 +100,29 @@
                 7px 7px 0 rgba(0, 0, 0, 0.45);
         }
 
+        #MainMenu .menu-title {
+            margin-bottom: 30px;
+            font-size: clamp(44px, 9vw, 96px);
+            text-shadow:
+                3px 3px 0 #0b0b0b,
+                6px 6px 0 #0b0b0b,
+                10px 10px 0 rgba(0, 0, 0, 0.62),
+                0 0 18px rgba(255, 255, 255, 0.22);
+        }
+
         .menu-subtitle {
             display: block;
             margin-top: 6px;
             color: #d5d1ca;
             font-size: clamp(18px, 3vw, 34px);
             text-shadow: 3px 3px 0 #111;
+        }
+
+        #MainMenu .menu-subtitle {
+            text-shadow:
+                2px 2px 0 #111,
+                4px 4px 0 rgba(0, 0, 0, 0.55),
+                0 0 12px rgba(255, 255, 255, 0.18);
         }
 
         .menu-buttons {
@@ -159,12 +194,72 @@
                 inset -2px -2px rgba(0, 0, 0, 0.45);
         }
 
+        .bottom-tools {
+            margin-top: 14px;
+            border: 1px solid #30363d;
+            background: #1d2228;
+        }
+
+        .bottom-tool-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            padding: 12px;
+        }
+
+        .bottom-tool-button {
+            min-height: 48px;
+            border: 2px solid #0e1114;
+            box-shadow: inset 2px 2px rgba(255, 255, 255, 0.18),
+                inset -2px -2px rgba(0, 0, 0, 0.35);
+            background: #4f5a62;
+            color: #f1f4f7;
+            font-size: 17px;
+            font-weight: 700;
+            text-shadow: 1px 1px #111;
+        }
+
+        .bottom-tool-button:hover {
+            background: #64717b;
+        }
+
+        .tool-panel {
+            display: none;
+            padding: 0 12px 14px;
+        }
+
+        .guide-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .guide-card {
+            min-height: 52px;
+            padding: 10px 12px;
+            border: 1px solid #3c444d;
+            background: #242a31;
+        }
+
+        .guide-card strong {
+            display: block;
+            margin-bottom: 4px;
+            color: #ffffff;
+            font-size: 14px;
+        }
+
+        .guide-card span {
+            display: block;
+            color: #c6d0da;
+            font-size: 13px;
+            line-height: 1.35;
+        }
+
         .controls {
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
             align-items: center;
-            margin-top: 12px;
         }
 
         button {
@@ -175,10 +270,17 @@
             cursor: pointer;
         }
 
-        p {
+        .quick-help {
             margin: 10px 0 0;
             color: #b7c0ca;
             font-size: 14px;
+        }
+
+        @media (max-width: 720px) {
+            .bottom-tool-buttons,
+            .guide-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
     <script type="text/javascript" src="../Common/webgl-utils.js"></script>
@@ -234,7 +336,7 @@
 
 <body>
     <main class="page">
-        <h2>Minecraft Hierarchical Model - Steve</h2>
+        <h2>Minecraft WebGL Simulation</h2>
         <div class="game-shell">
             <canvas id="gl-canvas" width="1280" height="720">
                 Oops ... your browser doesn't support the HTML5 canvas element
@@ -245,7 +347,7 @@
             <div id="MainMenu" class="main-menu">
                 <h1 class="menu-title">
                     MINECRAFT
-                    <span class="menu-subtitle">Team Project</span>
+                    <span class="menu-subtitle">Team00 Project</span>
                 </h1>
                 <div class="menu-buttons">
                     <button id="NicknameButton" class="menu-button">Player Name: Steve</button>
@@ -270,19 +372,63 @@
             </div>
         </div>
 
-        <div class="controls">
-            <button id="WalkButton">Walking Animation On/Off</button>
-            <button id="CrouchButton">Crouch On/Off</button>
-            <button id="RotateButton">Auto Rotate On/Off</button>
-            <button id="CameraModeButton">Camera Mode: Third Person</button>
-            <button id="CineLeftButton">Cine Look Left</button>
-            <button id="CineRightButton">Cine Look Right</button>
-            <button id="CineUpButton">Cine Look Up</button>
-            <button id="CineDownButton">Cine Look Down</button>
-            <button id="CineResetButton">Cine Look Reset</button>
-            <button id="ResetButton">Reset Pose</button>
+        <div class="bottom-tools">
+            <div class="bottom-tool-buttons">
+                <button id="GuideToggleButton" class="bottom-tool-button">Play Guide</button>
+                <button id="DevToggleButton" class="bottom-tool-button">Developer Tools</button>
+            </div>
+
+            <div id="GuidePanel" class="tool-panel">
+                <div class="guide-grid">
+                    <div class="guide-card">
+                        <strong>Move / 이동</strong>
+                        <span>WASD moves Steve based on his facing direction.</span>
+                        <span>WASD로 스티브가 바라보는 방향 기준으로 이동합니다.</span>
+                    </div>
+                    <div class="guide-card">
+                        <strong>Camera / 카메라</strong>
+                        <span>Click the canvas, then move the mouse to control the view.</span>
+                        <span>캔버스를 클릭한 뒤 마우스를 움직여 시점을 조작합니다.</span>
+                    </div>
+                    <div class="guide-card">
+                        <strong>Jump & Crouch / 점프와 웅크리기</strong>
+                        <span>Space jumps. Shift toggles crouching.</span>
+                        <span>Space는 점프, Shift는 웅크리기입니다.</span>
+                    </div>
+                    <div class="guide-card">
+                        <strong>Block Interaction / 블록 상호작용</strong>
+                        <span>Left click hits the block. Hold left click to keep mining.</span>
+                        <span>좌클릭으로 블록을 때리고, 꾹 누르면 계속 채굴합니다.</span>
+                    </div>
+                    <div class="guide-card">
+                        <strong>Options / 옵션</strong>
+                        <span>Press ESC to open options during play.</span>
+                        <span>게임 중 ESC를 누르면 옵션 화면이 열립니다.</span>
+                    </div>
+                    <div class="guide-card">
+                        <strong>Cinematic Camera / 시네마틱 카메라</strong>
+                        <span>In cinematic mode, TAB switches Fixed and Free camera. Free camera uses WASD/QE.</span>
+                        <span>시네마틱 모드에서 TAB으로 고정/자유 카메라를 바꾸고, 자유 카메라는 WASD/QE로 이동합니다.</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="DevPanel" class="tool-panel">
+                <div class="controls">
+                    <button id="WalkButton">Walking Animation On/Off</button>
+                    <button id="CrouchButton">Crouch On/Off</button>
+                    <button id="RotateButton">Auto Rotate On/Off</button>
+                    <button id="CameraModeButton">Camera Mode: Third Person</button>
+                    <button id="CineLeftButton">Cine Look Left</button>
+                    <button id="CineRightButton">Cine Look Right</button>
+                    <button id="CineUpButton">Cine Look Up</button>
+                    <button id="CineDownButton">Cine Look Down</button>
+                    <button id="CineResetButton">Cine Look Reset</button>
+                    <button id="ResetButton">Reset Pose</button>
+                </div>
+            </div>
         </div>
-        <p>WASD: Move, Click Canvas + Mouse Move: Camera, Shift: Crouch, Space: Jump, TAB: Fixed/Free Camera</p>
+        <p class="quick-help">WASD: Move, Mouse: Camera, Left Click: Hit Block, Shift: Crouch, Space: Jump, ESC: Options</p>
     </main>
 </body>
 
