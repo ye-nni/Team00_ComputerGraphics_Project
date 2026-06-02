@@ -15,6 +15,9 @@ var modelViewMatrixLoc;
 var projectionMatrixLoc;
 var colorLoc;
 var lightPositionLoc;
+var ambientStrengthLoc;
+var diffuseStrengthLoc;
+var rimStrengthLoc;
 var instanceMatrix;
 
 var stack = [];
@@ -59,8 +62,9 @@ var LEG_DEPTH = 0.4;
 var FOOT_DEPTH = 0.43;
 
 var JOINT_OVERLAP = 0.045;
+var WALK_HIP_OVERLAP = 0.04;
 var CROUCH_JOINT_OVERLAP = 0.05;
-var CROUCH_HIP_OVERLAP = 0.26;
+var CROUCH_HIP_OVERLAP = 0.20;
 var CROUCH_HEAD_OVERLAP = 0.045;
 var FRONT_PATCH_DEPTH = 0.003;
 var SIDE_PATCH_WIDTH = 0.003;
@@ -90,7 +94,7 @@ var jumpFrame = 0.0;
 var JUMP_PREP_DURATION = 8.0;
 var JUMP_AIR_DURATION = 30.0;
 var JUMP_DURATION = JUMP_PREP_DURATION + JUMP_AIR_DURATION;
-var JUMP_HEIGHT = 0.55;
+var JUMP_HEIGHT = 0.65;
 var cameraYaw = 180.0;
 var cameraPitch = 18.0;
 var cinematicEye = vec3(5.0, 2.8, 6.2);
@@ -111,6 +115,11 @@ var playerNameTag;
 var cameraModePopup;
 var cameraPopupTimer = 0;
 var showPlayerNameTag = true;
+var nightMode = false;
+var nightCreeperTimer = 0.0;
+var NIGHT_CREEPER_DELAY = 3600.0;
+var nightCreeperEnabled = true;
+var nightCreeperSpawned = false;
 var armSwingFrame = 0.0;
 var armSwingActive = false;
 var armSwingHeld = false;
@@ -126,8 +135,35 @@ var targetBlock = {
     hits: 0,
     broken: false
 };
-var BLOCK_BREAK_HITS = 5;
+var BLOCK_BREAK_HITS = 10;
 var BLOCK_INTERACTION_DISTANCE = 2.2;
+var explosionBreakRadius = 4.2;
+var worldBlocks = [
+    { x: 0.0, y: -0.294, z: -4.8, broken: false },
+    { x: -1.6, y: -0.294, z: -3.2, broken: false },
+    { x: 1.6, y: -0.294, z: -3.2, broken: false }
+];
+
+var creeperVisible = false;
+var creeperX = -16.0;
+var creeperY = 1.54;
+var creeperZ = 16.0;
+var creeperSpeed = 0.025;
+var creeperYaw = 0.0;
+var creeperFuseActive = false;
+var creeperFuseFrame = 0.0;
+var CREEPER_FUSE_DURATION = 62.0;
+var explosionActive = false;
+var explosionFrame = 0.0;
+var EXPLOSION_DURATION = 34.0;
+var explosionX = 0.0;
+var explosionY = 0.0;
+var explosionZ = 0.0;
+var steveFallDelayFrame = 0.0;
+var STEVE_FALL_DELAY = 30.0;
+var steveFallen = false;
+var delayedExplosionBreakPending = false;
+var endingTriggered = false;
 
 // 색상만 요청하신 사항에 맞춰 수정되었습니다.
 var colors = {
@@ -156,7 +192,29 @@ var colors = {
     brownGrey: vec4(0.31, 0.32, 0.33, 1.0),
     brownLight: vec4(0.42, 0.3, 0.23, 1.0),
     brownSoil: vec4(0.30, 0.20, 0.13, 1.0),
-    brownDark: vec4(0.22, 0.14, 0.09, 1.0)
+    brownDark: vec4(0.22, 0.14, 0.09, 1.0),
+    greyDark: vec4(0.39, 0.39, 0.39, 1.0),
+    blueLight: vec4(0.09, 0.79, 0.75, 1.0),
+    blueDia: vec4(0.15, 0.80, 0.80, 1.0),
+    blueDark: vec4(0.13, 0.58, 0.57, 1.0),
+    crack: vec4(0.08, 0.08, 0.09, 1.0),
+    creeperGreen: vec4(0.25, 0.65, 0.19, 1.0),
+    creeperFlash: vec4(0.96, 0.96, 0.90, 1.0),
+    explosionWhite: vec4(0.94, 0.94, 0.90, 0.72),
+    explosionSmoke: vec4(0.34, 0.34, 0.33, 0.52),
+    cloud: vec4(0.92, 0.94, 0.96, 0.72),
+    cloudShadow: vec4(0.72, 0.76, 0.80, 0.48),
+    cloudNight: vec4(0.45, 0.50, 0.62, 0.38),
+    cloudNightShadow: vec4(0.20, 0.24, 0.34, 0.28),
+    moon: vec4(0.92, 0.90, 0.72, 1.0),
+    moonLight: vec4(1.0, 0.95, 0.58, 1.0),
+    moonDark: vec4(0.74, 0.70, 0.48, 1.0),
+    wood: vec4(0.36, 0.22, 0.12, 1.0),
+    woodLight: vec4(0.48, 0.30, 0.17, 1.0),
+    woodDark: vec4(0.22, 0.13, 0.07, 1.0),
+    leaves: vec4(0.14, 0.42, 0.16, 1.0),
+    leavesLight: vec4(0.20, 0.52, 0.20, 1.0),
+    leavesDark: vec4(0.08, 0.28, 0.10, 1.0)
 };
 
 var vertices = [
@@ -188,6 +246,8 @@ window.onload = function init()
 
     gl.clearColor(0.68, 0.83, 0.96, 1.0);
     gl.enable(gl.DEPTH_TEST);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
     program = initShaders(gl, "vertex-shader", "fragment-shader");
     gl.useProgram(program);
@@ -212,6 +272,9 @@ window.onload = function init()
     projectionMatrixLoc = gl.getUniformLocation(program, "projectionMatrix");
     colorLoc = gl.getUniformLocation(program, "uColor");
     lightPositionLoc = gl.getUniformLocation(program, "lightPosition");
+    ambientStrengthLoc = gl.getUniformLocation(program, "ambientStrength");
+    diffuseStrengthLoc = gl.getUniformLocation(program, "diffuseStrength");
+    rimStrengthLoc = gl.getUniformLocation(program, "rimStrength");
 
     resizeCanvas();
     gl.uniform4fv(lightPositionLoc, flatten(vec4(2.0, 4.0, 3.0, 0.0)));
@@ -265,6 +328,14 @@ window.onload = function init()
         toggleBottomToolPanel("DevPanel");
     };
 
+    document.getElementById("NightModeButton").onclick = function () {
+        toggleNightMode();
+    };
+
+    document.getElementById("SpawnCreeperButton").onclick = function () {
+        spawnCreeper();
+    };
+
     document.getElementById("NicknameButton").onclick = function () {
         var name = prompt("Enter Player Name", playerName);
 
@@ -298,12 +369,36 @@ window.onload = function init()
             showPlayerNameTag ? "Name tag enabled." : "Name tag disabled.";
     };
 
-    document.getElementById("OptionResetButton").onclick = function () {
-        resetPlayerAndBlocks();
+    document.getElementById("OptionNightButton").onclick = function () {
+        toggleNightMode();
+        document.getElementById("OptionsMessage").textContent =
+            nightMode ? "Night mode enabled." : "Day mode enabled.";
+    };
+
+    document.getElementById("OptionCreeperButton").onclick = function () {
+        if (!nightMode) {
+            return;
+        }
+
+        nightCreeperEnabled = !nightCreeperEnabled;
+        resetNightCreeperTimer();
+        syncCreeperSpawnButton();
+        document.getElementById("OptionsMessage").textContent =
+            nightCreeperEnabled ? "Night creeper spawn enabled." : "Night creeper spawn disabled.";
+    };
+
+    document.getElementById("OptionResetPlayerButton").onclick = function () {
+        resetPlayerOnly();
         gameState = "options";
         keys = {};
         document.getElementById("OptionsMessage").textContent =
-            "Player position and blocks reset.";
+            "Player position reset.";
+    };
+
+    document.getElementById("OptionResetBlocksButton").onclick = function () {
+        resetBreakableBlocks();
+        document.getElementById("OptionsMessage").textContent =
+            "Blocks restored.";
     };
 
     document.getElementById("OptionTitleButton").onclick = function () {
@@ -497,6 +592,8 @@ function openOptions(returnState)
         returnState === "menu" ? "Back to Menu" : "Back to Game";
     syncCameraModeButtons();
     syncNameTagButton();
+    syncNightModeButton();
+    syncCreeperSpawnButton();
 }
 
 function closeOptions()
@@ -584,6 +681,58 @@ function syncNameTagButton()
 {
     document.getElementById("OptionNameTagButton").textContent =
         showPlayerNameTag ? "Name Tag: On" : "Name Tag: Off";
+}
+
+function syncNightModeButton()
+{
+    document.getElementById("NightModeButton").textContent =
+        nightMode ? "Night Mode: On" : "Night Mode: Off";
+    document.getElementById("OptionNightButton").textContent =
+        nightMode ? "Night Mode: On" : "Night Mode: Off";
+    syncCreeperSpawnButton();
+}
+
+function syncCreeperSpawnButton()
+{
+    var button = document.getElementById("OptionCreeperButton");
+
+    if (!nightMode) {
+        button.textContent = "Creeper Spawn: Day Disabled";
+        button.disabled = true;
+        return;
+    }
+
+    button.disabled = false;
+    button.textContent = nightCreeperEnabled ?
+        "Creeper Spawn: On" : "Creeper Spawn: Off";
+}
+
+function toggleNightMode()
+{
+    nightMode = !nightMode;
+    resetNightCreeperTimer();
+    syncNightModeButton();
+}
+
+function resetNightCreeperTimer()
+{
+    nightCreeperTimer = 0.0;
+    nightCreeperSpawned = false;
+}
+
+function updateNightCreeperSpawn()
+{
+    if (!nightMode || !nightCreeperEnabled || gameState !== "playing" || nightCreeperSpawned ||
+        creeperVisible || endingTriggered || steveFallen) {
+        return;
+    }
+
+    nightCreeperTimer += frameScale;
+
+    if (nightCreeperTimer >= NIGHT_CREEPER_DELAY) {
+        spawnCreeper();
+        nightCreeperSpawned = true;
+    }
 }
 
 function updatePlayerNameTag(viewMatrix)
@@ -709,7 +858,7 @@ function initNodes(Id)
         break;
 
     case leftUpperLegId:
-        m = translate(-LEG_WIDTH * 0.52, crouching ? CROUCH_HIP_OVERLAP : 0.0, 0.0);
+        m = translate(-LEG_WIDTH * 0.52, crouching ? CROUCH_HIP_OVERLAP : (moving ? WALK_HIP_OVERLAP : 0.0), 0.0);
         m = mult(m, rotate(theta[leftUpperLegId], 1, 0, 0));
         figure[leftUpperLegId] = createNode(m, upperLeg, rightUpperLegId, leftLowerLegId);
         break;
@@ -727,7 +876,7 @@ function initNodes(Id)
         break;
 
     case rightUpperLegId:
-        m = translate(LEG_WIDTH * 0.52, crouching ? CROUCH_HIP_OVERLAP : 0.0, 0.0);
+        m = translate(LEG_WIDTH * 0.52, crouching ? CROUCH_HIP_OVERLAP : (moving ? WALK_HIP_OVERLAP : 0.0), 0.0);
         m = mult(m, rotate(theta[rightUpperLegId], 1, 0, 0));
         figure[rightUpperLegId] = createNode(m, upperLeg, null, rightLowerLegId);
         break;
@@ -986,7 +1135,7 @@ function updatePose()
 
     if (crouching) {
         crouchAmount = 0.24;
-        bodyShiftZ = -0.22;
+        bodyShiftZ = 0.0;
         bodyPitch += 22.0;
         theta[leftUpperLegId] += -26.0;
         theta[rightUpperLegId] += -26.0;
@@ -1061,7 +1210,7 @@ function applyArmSwing()
         ((-50.0 - 3.0 * chop) * blend);
     theta[leftLowerArmId] = theta[leftLowerArmId] * (1.0 - blend) +
         ((-5.0 - 24.0 * chop) * blend);
-    armSwingUpperSideAngle = sideSwing * 4.0 * blend;
+    armSwingUpperSideAngle = sideSwing * 3.2 * blend;
     armSwingSideAngle = 0.0;
 
     if (!paused) {
@@ -1125,6 +1274,12 @@ function updateJump()
 
 function resetPlayerAndBlocks()
 {
+    resetPlayerOnly();
+    resetBreakableBlocks();
+}
+
+function resetPlayerOnly()
+{
     playerX = 0.0;
     playerY = 0.0;
     playerZ = 0.0;
@@ -1139,8 +1294,27 @@ function resetPlayerAndBlocks()
     armSwingUpperSideAngle = 0.0;
     armSwingSideAngle = 0.0;
     keys = {};
+    creeperVisible = false;
+    creeperX = -16.0;
+    creeperY = 1.54;
+    creeperZ = 16.0;
+    creeperYaw = 0.0;
+    creeperFuseActive = false;
+    creeperFuseFrame = 0.0;
+    explosionActive = false;
+    explosionFrame = 0.0;
+    steveFallDelayFrame = 0.0;
+    steveFallen = false;
+    delayedExplosionBreakPending = false;
+    resetNightCreeperTimer();
+    endingTriggered = false;
+}
+
+function resetBreakableBlocks()
+{
     targetBlock.hits = 0;
     targetBlock.broken = false;
+    resetWorldBlocks();
 }
 
 function resetPose()
@@ -1171,10 +1345,30 @@ function resetPose()
     jumpFrame = 0.0;
     targetBlock.hits = 0;
     targetBlock.broken = false;
+    resetWorldBlocks();
+    creeperVisible = false;
+    creeperX = -16.0;
+    creeperY = 1.54;
+    creeperZ = 16.0;
+    creeperYaw = 0.0;
+    creeperFuseActive = false;
+    creeperFuseFrame = 0.0;
+    explosionActive = false;
+    explosionFrame = 0.0;
+    steveFallDelayFrame = 0.0;
+    steveFallen = false;
+    delayedExplosionBreakPending = false;
+    resetNightCreeperTimer();
+    endingTriggered = false;
 }
 
 function updateMovement()
 {
+    if (steveFallen) {
+        moving = false;
+        return;
+    }
+
     if (gameState !== "playing") {
         moving = false;
         return;
@@ -1281,13 +1475,40 @@ function updateFrameScale()
     frameScale = Math.max(0.25, Math.min(2.5, deltaSeconds * 60.0));
 }
 
+function applySceneLighting()
+{
+    if (nightMode) {
+        gl.uniform4fv(lightPositionLoc, flatten(vec4(-2.2, 5.8, -3.2, 0.0)));
+        gl.uniform1f(ambientStrengthLoc, 0.42);
+        gl.uniform1f(diffuseStrengthLoc, 0.38);
+        gl.uniform1f(rimStrengthLoc, 0.08);
+    }
+    else {
+        gl.uniform4fv(lightPositionLoc, flatten(vec4(2.4, 4.8, 3.2, 0.0)));
+        gl.uniform1f(ambientStrengthLoc, 0.32);
+        gl.uniform1f(diffuseStrengthLoc, 0.74);
+        gl.uniform1f(rimStrengthLoc, 0.035);
+    }
+}
+
 function render()
 {
     updateFrameScale();
     resizeCanvas();
+    if (nightMode) {
+        gl.clearColor(0.035, 0.055, 0.12, 1.0);
+    }
+    else {
+        gl.clearColor(0.64, 0.82, 0.98, 1.0);
+    }
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    applySceneLighting();
 
     updatePose();
+    updateCreeper();
+    updateExplosion();
+    updateSteveFallDelay();
+    updateNightCreeperSpawn();
     updateCameraModePopup();
 
     for (var i = 0; i < numNodes; i++) {
@@ -1326,12 +1547,34 @@ function render()
     var up = vec3(0.0, 1.0, 0.0);
 
     modelViewMatrix = lookAt(eye, at, up);
+    drawSkyDetails();
     drawGround();
-    if (!targetBlock.broken) {
-        grassBlock(targetBlock.x, targetBlock.y, targetBlock.z);
+    drawWorldBlocks();
+    drawTree(8.0, -0.82, 6.4);
+
+    if (creeperVisible) {
+        creeperModel(creeperX, creeperY, creeperZ);
     }
-    updatePlayerNameTag(modelViewMatrix);
+
+    if (explosionActive) {
+        drawExplosionEffect();
+    }
+
+    if (!targetBlock.broken) {
+        diaBlock(targetBlock.x, targetBlock.y, targetBlock.z);
+    }
+
+    if (steveFallen) {
+        playerNameTag.style.display = "none";
+    }
+    else {
+        updatePlayerNameTag(modelViewMatrix);
+    }
     modelViewMatrix = mult(modelViewMatrix, translate(playerX, playerY, playerZ));
+    if (steveFallen) {
+        modelViewMatrix = mult(modelViewMatrix, translate(0.0, -0.78, 0.0));
+        modelViewMatrix = mult(modelViewMatrix, rotate(88.0, 0, 0, 1));
+    }
     traverse(torsoId);
 
     requestAnimFrame(render);
@@ -1412,8 +1655,130 @@ function grassTile(x, z)
 
 function drawGround()
 {
-    for(var x=-8; x<=8; x+=1.6)
-         for(var z=-8; z<=8; z+=1.6) grassTile(x, z);
+    var tileCount = 20;
+    var tileSize = 1.6;
+    var groundStart = -0.5 * (tileCount - 1) * tileSize;
+
+    for(var i=0; i<tileCount; i++) {
+        for(var j=0; j<tileCount; j++) {
+            grassTile(groundStart + i * tileSize, groundStart + j * tileSize);
+        }
+    }
+}
+
+function drawWorldBlocks()
+{
+    for (var i = 0; i < worldBlocks.length; i++) {
+        if (!worldBlocks[i].broken) {
+            grassBlock(worldBlocks[i].x, worldBlocks[i].y, worldBlocks[i].z);
+        }
+    }
+}
+
+function resetWorldBlocks()
+{
+    for (var i = 0; i < worldBlocks.length; i++) {
+        worldBlocks[i].broken = false;
+    }
+}
+
+function breakBlocksNearExplosion()
+{
+    for (var i = 0; i < worldBlocks.length; i++) {
+        var explosionDx = worldBlocks[i].x - explosionX;
+        var explosionDz = worldBlocks[i].z - explosionZ;
+        var explosionDistance = Math.sqrt(explosionDx * explosionDx + explosionDz * explosionDz);
+
+        if (explosionDistance <= explosionBreakRadius) {
+            worldBlocks[i].broken = true;
+        }
+    }
+}
+
+function drawSkyDetails()
+{
+    cloudCluster(-5.8, 6.0, -10.8);
+    cloudClusterLong(5.8, 6.4, -13.6);
+    cloudCluster(10.4, 5.9, 3.4);
+    cloudClusterLong(-12.2, 6.2, 7.2);
+
+    if (nightMode) {
+        drawBlock(0.9, 0.9, 0.08, colors.moon, -13.4, 8.3, -14.2);
+        drawBlock(0.22, 0.22, 0.09, colors.moonLight, -13.55, 8.43, -14.14);
+        drawBlock(0.18, 0.18, 0.09, colors.moonLight, -13.24, 8.20, -14.14);
+        drawBlock(0.18, 0.18, 0.09, colors.moonDark, -13.66, 8.10, -14.14);
+        drawBlock(0.16, 0.16, 0.09, colors.moonDark, -13.32, 8.56, -14.14);
+    }
+}
+
+function cloudCluster(x, y, z)
+{
+    stack.push(modelViewMatrix);
+    modelViewMatrix = mult(modelViewMatrix, translate(x, y, z));
+
+    var cloudColor = nightMode ? colors.cloudNight : colors.cloud;
+    var shadowColor = nightMode ? colors.cloudNightShadow : colors.cloudShadow;
+
+    drawBlock(1.55, 0.34, 0.72, cloudColor, 0.0, 0.0, 0.0);
+    drawBlock(0.85, 0.32, 0.68, cloudColor, -1.05, 0.0, 0.0);
+    drawBlock(0.95, 0.32, 0.68, cloudColor, 1.05, 0.0, 0.0);
+    drawBlock(0.75, 0.34, 0.66, cloudColor, 0.15, 0.30, 0.0);
+    drawBlock(1.25, 0.09, 0.56, shadowColor, 0.05, -0.22, 0.02);
+
+    modelViewMatrix = stack.pop();
+}
+
+function cloudClusterLong(x, y, z)
+{
+    stack.push(modelViewMatrix);
+    modelViewMatrix = mult(modelViewMatrix, translate(x, y, z));
+
+    var cloudColor = nightMode ? colors.cloudNight : colors.cloud;
+    var shadowColor = nightMode ? colors.cloudNightShadow : colors.cloudShadow;
+
+    drawBlock(1.95, 0.34, 0.78, cloudColor, 0.0, 0.0, 0.0);
+    drawBlock(0.90, 0.32, 0.72, cloudColor, -1.15, 0.0, 0.0);
+    drawBlock(0.90, 0.32, 0.72, cloudColor, 1.15, 0.0, 0.0);
+    drawBlock(0.82, 0.34, 0.70, cloudColor, -0.40, 0.28, 0.0);
+    drawBlock(0.82, 0.34, 0.70, cloudColor, 0.55, 0.24, 0.0);
+    drawBlock(1.75, 0.09, 0.60, shadowColor, 0.0, -0.22, 0.02);
+
+    modelViewMatrix = stack.pop();
+}
+
+function drawTree(x, y, z)
+{
+    stack.push(modelViewMatrix);
+    modelViewMatrix = mult(modelViewMatrix, translate(x, y, z));
+
+    drawTreeTrunk();
+    drawTreeLeaves();
+
+    modelViewMatrix = stack.pop();
+}
+
+function drawTreeTrunk()
+{
+    drawBlock(0.82, 2.65, 0.82, colors.wood, 0.0, 1.32, 0.0);
+
+    drawFrontPatch(0.18, 0.42, colors.woodLight, -0.22, 1.80, 0.41);
+    drawFrontPatch(0.16, 0.34, colors.woodDark, 0.22, 0.82, 0.41);
+    drawBackPatch(0.18, 0.38, colors.woodDark, -0.14, 1.18, 0.41);
+    drawLeftPatch(0.36, 0.16, colors.woodLight, 1.36, -0.18, 0.41);
+    drawRightPatch(0.34, 0.16, colors.woodDark, 0.58, 0.20, 0.41);
+}
+
+function drawTreeLeaves()
+{
+    drawBlock(2.25, 1.10, 2.25, colors.leaves, 0.0, 2.95, 0.0);
+    drawBlock(1.75, 0.95, 1.75, colors.leavesLight, -0.28, 3.62, -0.16);
+    drawBlock(1.55, 0.82, 1.55, colors.leaves, 0.34, 4.08, 0.22);
+    drawBlock(0.92, 0.70, 0.92, colors.leavesDark, -1.02, 3.25, 0.34);
+    drawBlock(0.88, 0.68, 0.88, colors.leavesDark, 1.05, 3.18, -0.26);
+    drawBlock(0.76, 0.62, 0.76, colors.leavesLight, 0.16, 4.58, -0.04);
+    drawBlock(0.95, 0.74, 0.95, colors.leaves, -0.78, 3.82, -0.72);
+    drawBlock(0.90, 0.70, 0.90, colors.leavesLight, 0.82, 3.72, 0.72);
+    drawBlock(0.72, 0.58, 0.72, colors.leavesDark, 0.12, 3.18, 1.12);
 }
 
 
@@ -1495,6 +1860,233 @@ function grassBlock(x, y, z)
     drawRightPatch(0.2, 0.2, colors.brownDark, 0, -0.2, +0.797);
     drawRightPatch(0.2, 0.2, colors.eyeBlue, +0.2, -0.2, +0.797);
 
+
+    modelViewMatrix = stack.pop();
+}
+
+function diaBlock(x, y, z)
+{
+    stack.push(modelViewMatrix);
+
+    modelViewMatrix = mult(modelViewMatrix, translate(x, y, z));
+
+    drawBlock(1.6, 1.597, 1.597, colors.brownGrey, 0, 0, 0);
+
+    drawTopPatch(0.2, 0.2, colors.greyDark, -0.6, -0.6, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.greyDark, 0.4, -0.6, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.greyDark, 0.6, -0.2, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.greyDark, 0.6, 0, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.greyDark, -0.4, 0.2, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.greyDark, -0.2, 0.6, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.blueLight, 0, -0.6, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.blueLight, 0.4, 0.6, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.blueDia, 0.2, -0.6, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.blueDia, 0.4, -0.4, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.blueDia, 0, 0, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.blueDia, -0.6, 0.2, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.blueDia, 0.2, 0.6, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.blueDark, 0.2, -0.4, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.blueDark, -0.6, 0, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.blueDark, -0.4, 0, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.blueDark, 0.4, 0.4, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.blueDark, 0.6, 0.6, 0.7985);
+
+    drawFrontPatch(0.2, 0.2, colors.greyDark, -0.6, 0.6, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.greyDark, 0.4, 0.6, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.greyDark, 0.6, 0.2, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.greyDark, 0.6, 0, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.greyDark, -0.4, -0.2, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.greyDark, -0.2, -0.6, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.blueLight, 0, 0.6, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.blueLight, 0.4, -0.6, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.blueDia, 0.2, 0.6, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.blueDia, 0.4, 0.4, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.blueDia, 0, 0, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.blueDia, -0.6, -0.2, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.blueDia, 0.2, -0.6, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.blueDark, 0.2, 0.4, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.blueDark, -0.6, 0, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.blueDark, -0.4, 0, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.blueDark, 0.4, -0.4, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.blueDark, 0.6, -0.6, 0.7985);
+
+    drawBlockCracks(targetBlock.hits);
+
+    modelViewMatrix = stack.pop();
+}
+
+function drawBlockCracks(hits)
+{
+    if (hits <= 0) {
+        return;
+    }
+
+    var stage = Math.min(4, Math.ceil(hits / 2));
+    var z = 0.803;
+    var topY = 0.803;
+
+    drawFrontPatch(0.055, 0.42, colors.crack, -0.08, 0.12, z);
+    drawFrontPatch(0.34, 0.055, colors.crack, 0.10, 0.27, z);
+
+    if (stage >= 2) {
+        drawFrontPatch(0.055, 0.30, colors.crack, 0.30, 0.05, z);
+        drawFrontPatch(0.30, 0.055, colors.crack, -0.23, -0.12, z);
+        drawTopPatch(0.055, 0.42, colors.crack, -0.10, 0.12, topY);
+    }
+
+    if (stage >= 3) {
+        drawFrontPatch(0.055, 0.28, colors.crack, -0.36, -0.27, z);
+        drawFrontPatch(0.28, 0.055, colors.crack, 0.40, -0.20, z);
+        drawTopPatch(0.34, 0.055, colors.crack, 0.18, 0.30, topY);
+        drawTopPatch(0.055, 0.28, colors.crack, 0.36, -0.18, topY);
+    }
+
+    if (stage >= 4) {
+        drawFrontPatch(0.42, 0.055, colors.crack, -0.03, -0.43, z);
+        drawFrontPatch(0.055, 0.24, colors.crack, 0.55, 0.34, z);
+        drawTopPatch(0.28, 0.055, colors.crack, -0.36, -0.32, topY);
+        drawTopPatch(0.055, 0.24, colors.crack, 0.56, 0.44, topY);
+    }
+}
+
+function spawnCreeper()
+{
+    creeperVisible = true;
+    creeperX = -16.0;
+    creeperY = 1.54;
+    creeperZ = 16.0;
+    creeperYaw = 0.0;
+    creeperFuseActive = false;
+    creeperFuseFrame = 0.0;
+    explosionActive = false;
+    explosionFrame = 0.0;
+    steveFallen = false;
+    delayedExplosionBreakPending = false;
+    endingTriggered = false;
+}
+
+function creeperModel(x, y, z)
+{
+    stack.push(modelViewMatrix);
+
+    modelViewMatrix = mult(modelViewMatrix, translate(x, y, z));
+    modelViewMatrix = mult(modelViewMatrix, rotateY(creeperYaw * 180.0 / Math.PI + 180.0));
+
+    var blink = creeperFuseActive && Math.floor(creeperFuseFrame / 6.0) % 2 === 0;
+    var bodyColor = blink ? colors.creeperFlash : colors.creeperGreen;
+
+    drawBlock(0.96, 0.96, 0.96, bodyColor, 0, 0, 0);
+    drawBlock(0.96, 1.44, 0.48, bodyColor, 0, -1.2, 0);
+    drawBlock(0.96, 0.72, 0.48, bodyColor, 0, -2.28, 0.48);
+    drawBlock(0.96, 0.72, 0.48, bodyColor, 0, -2.28, -0.48);
+
+    drawBackPatch(0.24, 0.24, vec4(0, 0, 0, 1.0), -0.24, 0.12, 0.48);
+    drawBackPatch(0.24, 0.24, vec4(0, 0, 0, 1.0), 0.24, 0.12, 0.48);
+    drawBackPatch(0.24, 0.24, vec4(0, 0, 0, 1.0), 0, -0.24, 0.48);
+
+    modelViewMatrix = stack.pop();
+}
+
+function updateCreeper()
+{
+    if (!creeperVisible || endingTriggered || gameState !== "playing") {
+        return;
+    }
+
+    var dx = playerX - creeperX;
+    var dz = playerZ - creeperZ;
+    var dist = Math.sqrt(dx * dx + dz * dz);
+
+    if (creeperFuseActive) {
+        creeperFuseFrame += frameScale;
+
+        if (dist > 3.4) {
+            creeperFuseActive = false;
+            creeperFuseFrame = 0.0;
+        }
+        else if (creeperFuseFrame >= CREEPER_FUSE_DURATION) {
+            triggerCreeperExplosion();
+        }
+        return;
+    }
+
+    if (dist > 0.001) {
+        creeperYaw = Math.atan2(dx, dz);
+        creeperX += dx / dist * creeperSpeed * frameScale;
+        creeperZ += dz / dist * creeperSpeed * frameScale;
+    }
+
+    if (dist < 2.5) {
+        creeperFuseActive = true;
+        creeperFuseFrame = 0.0;
+    }
+}
+
+function triggerCreeperExplosion()
+{
+    endingTriggered = true;
+    creeperVisible = false;
+    creeperFuseActive = false;
+    explosionActive = true;
+    explosionFrame = 0.0;
+    explosionX = creeperX;
+    explosionY = 0.55;
+    explosionZ = creeperZ;
+    steveFallDelayFrame = STEVE_FALL_DELAY;
+    delayedExplosionBreakPending = true;
+    keys = {};
+    armSwingHeld = false;
+
+    if (document.exitPointerLock && document.pointerLockElement === canvas) {
+        document.exitPointerLock();
+    }
+}
+
+function updateSteveFallDelay()
+{
+    if (steveFallen || steveFallDelayFrame <= 0.0) {
+        return;
+    }
+
+    steveFallDelayFrame -= frameScale;
+
+    if (steveFallDelayFrame <= 0.0) {
+        steveFallen = true;
+        if (delayedExplosionBreakPending) {
+            targetBlock.broken = true;
+            breakBlocksNearExplosion();
+            delayedExplosionBreakPending = false;
+        }
+    }
+}
+
+function updateExplosion()
+{
+    if (!explosionActive) {
+        return;
+    }
+
+    explosionFrame += frameScale;
+
+    if (explosionFrame >= EXPLOSION_DURATION) {
+        explosionActive = false;
+        explosionFrame = 0.0;
+    }
+}
+
+function drawExplosionEffect()
+{
+    var t = explosionFrame / EXPLOSION_DURATION;
+    var pulse = 1.0 + t * 1.25;
+
+    stack.push(modelViewMatrix);
+    modelViewMatrix = mult(modelViewMatrix, translate(explosionX, explosionY, explosionZ));
+
+    drawBlock(0.95 * pulse, 0.95 * pulse, 0.95 * pulse, colors.explosionWhite, 0.0, 0.08, 0.0);
+    drawBlock(0.80 * pulse, 0.80 * pulse, 0.80 * pulse, colors.explosionSmoke, -0.48 * pulse, 0.18 * pulse, 0.02);
+    drawBlock(0.78 * pulse, 0.78 * pulse, 0.78 * pulse, colors.explosionSmoke, 0.48 * pulse, 0.12 * pulse, -0.02);
+    drawBlock(0.70 * pulse, 0.70 * pulse, 0.70 * pulse, colors.explosionWhite, 0.0, 0.50 * pulse, 0.0);
+    drawBlock(0.72 * pulse, 0.72 * pulse, 0.72 * pulse, colors.explosionSmoke, 0.0, 0.08 * pulse, 0.50 * pulse);
 
     modelViewMatrix = stack.pop();
 }

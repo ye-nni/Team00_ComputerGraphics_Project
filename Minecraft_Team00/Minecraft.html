@@ -147,6 +147,25 @@
             background: #8b8b8b;
         }
 
+        .menu-button:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        .menu-button:disabled:hover {
+            background: #777;
+        }
+
+        .options-menu .menu-buttons {
+            width: min(680px, 86%);
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .options-menu .menu-button {
+            font-size: clamp(14px, 2vw, 22px);
+        }
+
         .menu-message {
             min-height: 18px;
             margin: 4px 0 0;
@@ -296,6 +315,9 @@
         uniform mat4 projectionMatrix;
         uniform vec4 uColor;
         uniform vec4 lightPosition;
+        uniform float ambientStrength;
+        uniform float diffuseStrength;
+        uniform float rimStrength;
 
         varying vec4 fColor;
 
@@ -314,10 +336,14 @@
             vec3 N = normalize((modelViewMatrix * vec4(vNormal, 0.0)).xyz);
             float d = max(dot(L, N), 0.0);
 
-            vec4 ambient = 0.35 * uColor;
-            vec4 diffuse = 0.65 * d * uColor;
+            float rim = pow(1.0 - max(dot(N, vec3(0.0, 0.0, 1.0)), 0.0), 2.0);
 
-            fColor = ambient + diffuse;
+            vec4 ambient = ambientStrength * uColor;
+            vec4 diffuse = diffuseStrength * d * uColor;
+            vec4 rimLight = rimStrength * rim * vec4(0.85, 0.92, 1.0, 1.0) * uColor.a;
+
+            fColor = ambient + diffuse + rimLight;
+            fColor.rgb = min(fColor.rgb, vec3(1.0));
             fColor.a = uColor.a;
             gl_Position = projectionMatrix * modelViewMatrix * vPosition;
         }
@@ -361,10 +387,13 @@
                 <h1 class="menu-title">
                     OPTIONS
                 </h1>
-                <div class="menu-buttons">
+                <div class="menu-buttons options-buttons">
                     <button id="OptionCameraButton" class="menu-button">Camera Mode: Third Person</button>
                     <button id="OptionNameTagButton" class="menu-button">Name Tag: On</button>
-                    <button id="OptionResetButton" class="menu-button">Reset Player and Blocks</button>
+                    <button id="OptionNightButton" class="menu-button">Night Mode: Off</button>
+                    <button id="OptionCreeperButton" class="menu-button">Creeper Spawn: Day Disabled</button>
+                    <button id="OptionResetPlayerButton" class="menu-button">Reset Player</button>
+                    <button id="OptionResetBlocksButton" class="menu-button">Reset Blocks</button>
                     <button id="OptionTitleButton" class="menu-button">Back to Title Screen</button>
                     <button id="OptionBackButton" class="menu-button">Back to Game</button>
                 </div>
@@ -424,6 +453,8 @@
                     <button id="CineUpButton">Cine Look Up</button>
                     <button id="CineDownButton">Cine Look Down</button>
                     <button id="CineResetButton">Cine Look Reset</button>
+                    <button id="NightModeButton">Night Mode: Off</button>
+                    <button id="SpawnCreeperButton">Spawn Creeper</button>
                     <button id="ResetButton">Reset Pose</button>
                 </div>
             </div>
