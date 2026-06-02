@@ -65,6 +65,11 @@
                     rgba(0, 0, 0, 0.08) 16px);
         }
 
+        .options-menu .menu-title {
+            font-size: clamp(28px, 5vw, 52px);
+            margin-bottom: 14px;
+        }
+
         .menu-title {
             margin: 0 0 18px;
             color: #f2f2f2;
@@ -134,6 +139,26 @@
                 inset -1px -1px rgba(0, 0, 0, 0.45);
         }
 
+        .camera-popup {
+            position: absolute;
+            left: 50%;
+            top: 14%;
+            display: none;
+            min-width: 220px;
+            padding: 10px 16px;
+            border: 2px solid rgba(18, 18, 18, 0.9);
+            background: rgba(36, 36, 36, 0.78);
+            color: #f5f5f5;
+            font-size: 18px;
+            font-weight: 700;
+            text-align: center;
+            text-shadow: 2px 2px #000;
+            transform: translateX(-50%);
+            pointer-events: none;
+            box-shadow: inset 2px 2px rgba(255, 255, 255, 0.22),
+                inset -2px -2px rgba(0, 0, 0, 0.45);
+        }
+
         .controls {
             display: flex;
             flex-wrap: wrap;
@@ -159,7 +184,7 @@
     <script type="text/javascript" src="../Common/webgl-utils.js"></script>
     <script type="text/javascript" src="../Common/initShaders.js"></script>
     <script type="text/javascript" src="../Common/MV.js"></script>
-    <script type="text/javascript" src="Minecraft.js"></script>
+    <script type="text/javascript" src="testmc06.js"></script>
 
     <script id="vertex-shader" type="x-shader/x-vertex">
         attribute vec4 vPosition;
@@ -215,6 +240,7 @@
                 Oops ... your browser doesn't support the HTML5 canvas element
             </canvas>
             <div id="PlayerNameTag" class="player-name-tag">Steve</div>
+            <div id="CameraModePopup" class="camera-popup">Fixed Camera</div>
 
             <div id="MainMenu" class="main-menu">
                 <h1 class="menu-title">
@@ -225,7 +251,6 @@
                     <button id="NicknameButton" class="menu-button">Player Name: Steve</button>
                     <button id="SinglePlayerButton" class="menu-button">Single Player</button>
                     <button id="SettingsButton" class="menu-button">Options...</button>
-                    <button id="QuitButton" class="menu-button">Quit Game</button>
                 </div>
                 <p id="MenuMessage" class="menu-message"></p>
             </div>
@@ -233,12 +258,12 @@
             <div id="OptionsMenu" class="main-menu options-menu">
                 <h1 class="menu-title">
                     OPTIONS
-                    <span class="menu-subtitle">Steve Controls</span>
                 </h1>
                 <div class="menu-buttons">
                     <button id="OptionCameraButton" class="menu-button">Camera Mode: Third Person</button>
                     <button id="OptionNameTagButton" class="menu-button">Name Tag: On</button>
-                    <button id="OptionResetButton" class="menu-button">Reset Pose / Start Position</button>
+                    <button id="OptionResetButton" class="menu-button">Reset Player and Blocks</button>
+                    <button id="OptionTitleButton" class="menu-button">Back to Title Screen</button>
                     <button id="OptionBackButton" class="menu-button">Back to Game</button>
                 </div>
                 <p id="OptionsMessage" class="menu-message">ESC: Back</p>
@@ -257,7 +282,8 @@
             <button id="CineResetButton">Cine Look Reset</button>
             <button id="ResetButton">Reset Pose</button>
         </div>
-        <p>WASD: Move, Click Canvas + Mouse Move: Third Person Camera, Shift: Crouch, Space: Pause/Resume</p>
+        <button id="SpawnCreeperButton">Spawn Creeper</button>
+        <p>WASD: Move, Click Canvas + Mouse Move: Camera, Shift: Crouch, Space: Jump, TAB: Fixed/Free Camera</p>
     </main>
 </body>
 

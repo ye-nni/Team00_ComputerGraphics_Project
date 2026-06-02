@@ -60,7 +60,7 @@ var FOOT_DEPTH = 0.43;
 
 var JOINT_OVERLAP = 0.045;
 var CROUCH_JOINT_OVERLAP = 0.05;
-var CROUCH_HIP_OVERLAP = 0.06;
+var CROUCH_HIP_OVERLAP = 0.26;
 var CROUCH_HEAD_OVERLAP = 0.045;
 var FRONT_PATCH_DEPTH = 0.003;
 var SIDE_PATCH_WIDTH = 0.003;
@@ -78,15 +78,24 @@ var bodyBounce = 0.0;
 var bodyPitch = 0.0;
 var bodyShiftZ = 0.0;
 var playerX = 0.0;
+var playerY = 0.0;
 var playerZ = 0.0;
 var moveSpeed = 0.055;
 var moving = false;
 var keys = {};
+var jumping = false;
+var jumpFrame = 0.0;
+var JUMP_PREP_DURATION = 8.0;
+var JUMP_AIR_DURATION = 30.0;
+var JUMP_DURATION = JUMP_PREP_DURATION + JUMP_AIR_DURATION;
+var JUMP_HEIGHT = 0.55;
 var cameraYaw = 180.0;
 var cameraPitch = 18.0;
 var cinematicEye = vec3(5.0, 2.8, 6.2);
 var cinematicYaw = -140.0;
 var cinematicPitch = -16.0;
+var cinematicMode = "fixed";
+var freeCameraSpeed = 0.10;
 var mouseDragging = false;
 var mouseOverCanvas = false;
 var lastMouseX = 0;
@@ -97,7 +106,35 @@ var gameState = "menu";
 var optionReturnState = "menu";
 var playerName = "Steve";
 var playerNameTag;
+var cameraModePopup;
+var cameraPopupTimer = 0;
 var showPlayerNameTag = true;
+var armSwingFrame = 0.0;
+var armSwingActive = false;
+var armSwingHeld = false;
+var armSwingReturnFrame = 0.0;
+var armSwingUpperSideAngle = 0.0;
+var armSwingSideAngle = 0.0;
+var ARM_SWING_DURATION = 16.0;
+var ARM_SWING_RETURN_DURATION = 8.0;
+var targetBlock = {
+    x: 0.0,
+    y: -0.2925,
+    z: -3.2015,
+    hits: 0,
+    broken: false
+};
+var BLOCK_BREAK_HITS = 5;
+var BLOCK_INTERACTION_DISTANCE = 2.2;
+
+var creeperVisible = false;
+var creeperX = -16.0;
+var creeperY = 1.54;
+var creeperZ = 16.0;
+var creeperSpeed = 0.025;
+var endingTriggered = false;
+var creeperYaw = 0.0;
+
 
 // 색상만 요청하신 사항에 맞춰 수정되었습니다.
 var colors = {
@@ -126,7 +163,15 @@ var colors = {
     brownGrey: vec4(0.31, 0.32, 0.33, 1.0),
     brownLight: vec4(0.42, 0.3, 0.23, 1.0),
     brownSoil: vec4(0.30, 0.20, 0.13, 1.0),
-    brownDark: vec4(0.22, 0.14, 0.09, 1.0)
+    brownDark: vec4(0.22, 0.14, 0.09, 1.0),
+
+    greyDark: vec4(0.39, 0.39, 0.39, 1.0),
+    blueLight: vec4(0.09, 0.79, 0.75, 1.0),
+    blueDia: vec4(0.15, 0.80, 0.80, 1.0),
+    blueDark: vec4(0.13, 0.58, 0.57, 1.0),
+
+    creeperGreen: vec4(0.25, 0.65, 0.19, 1.0),
+
 };
 
 var vertices = [
@@ -144,6 +189,7 @@ window.onload = function init()
 {
     canvas = document.getElementById("gl-canvas");
     playerNameTag = document.getElementById("PlayerNameTag");
+    cameraModePopup = document.getElementById("CameraModePopup");
 
     gl = WebGLUtils.setupWebGL(canvas);
     if (!gl) { alert("WebGL isn't available"); }
@@ -219,8 +265,7 @@ window.onload = function init()
     };
 
     document.getElementById("CineResetButton").onclick = function () {
-        cinematicYaw = -140.0;
-        cinematicPitch = -16.0;
+        resetCinematicCamera();
     };
 
     document.getElementById("ResetButton").onclick = function () {
@@ -247,11 +292,6 @@ window.onload = function init()
         openOptions("menu");
     };
 
-    document.getElementById("QuitButton").onclick = function () {
-        document.getElementById("MenuMessage").textContent =
-            "Quit Game is disabled in browser mode.";
-    };
-
     document.getElementById("OptionCameraButton").onclick = function () {
         toggleCameraMode();
         document.getElementById("OptionsMessage").textContent =
@@ -266,15 +306,26 @@ window.onload = function init()
     };
 
     document.getElementById("OptionResetButton").onclick = function () {
-        resetPose();
+        resetPlayerAndBlocks();
         gameState = "options";
         keys = {};
         document.getElementById("OptionsMessage").textContent =
-            "Pose and start position reset.";
+            "Player position and blocks reset.";
+    };
+
+    document.getElementById("OptionTitleButton").onclick = function () {
+        goToTitleScreen();
     };
 
     document.getElementById("OptionBackButton").onclick = function () {
         closeOptions();
+    };
+
+    document.getElementById("SpawnCreeperButton").onclick = function() {
+        creeperVisible = true;
+        creeperX = -16.0;
+        creeperY = 1.54;
+        creeperZ = 16.0;
     };
 
     window.addEventListener("keydown", function (event) {
@@ -292,6 +343,14 @@ window.onload = function init()
             return;
         }
 
+        if (event.code === "Tab") {
+            if (gameState === "playing" && cameraMode === "cinematic") {
+                toggleCinematicMode();
+            }
+            event.preventDefault();
+            return;
+        }
+
         if (gameState !== "playing") {
             if (isGameKey(event.code)) {
                 event.preventDefault();
@@ -303,7 +362,7 @@ window.onload = function init()
 
         if (event.code === "Space") {
             if (!event.repeat) {
-                paused = !paused;
+                startJump();
             }
         }
         else if (event.code === "ArrowLeft") {
@@ -319,7 +378,8 @@ window.onload = function init()
         if (event.code === "KeyW" || event.code === "KeyA" ||
             event.code === "KeyS" || event.code === "KeyD" ||
             event.code === "ArrowLeft" || event.code === "ArrowRight" ||
-            event.code === "Space") {
+            event.code === "KeyQ" || event.code === "KeyE" ||
+            event.code === "Space" || event.code === "Tab") {
             event.preventDefault();
         }
     });
@@ -347,6 +407,11 @@ window.onload = function init()
             return;
         }
 
+        if (event.button === 0) {
+            startArmSwing();
+            tryHitTargetBlock();
+        }
+
         lastMouseX = event.clientX;
         lastMouseY = event.clientY;
         mouseDragging = !canvas.requestPointerLock;
@@ -363,14 +428,24 @@ window.onload = function init()
         mouseOverCanvas = false;
     });
 
-    window.addEventListener("mouseup", function () {
+    window.addEventListener("mouseup", function (event) {
+        if (event.button === 0) {
+            armSwingHeld = false;
+            armSwingReturnFrame = ARM_SWING_RETURN_DURATION;
+        }
+        mouseDragging = false;
+    });
+
+    document.addEventListener("pointerlockchange", function () {
+        lastMouseX = 0;
+        lastMouseY = 0;
         mouseDragging = false;
     });
 
     window.addEventListener("mousemove", function (event) {
         var pointerLocked = (document.pointerLockElement === canvas);
 
-        if (gameState !== "playing" || cameraMode !== "third" ||
+        if (gameState !== "playing" ||
             (!mouseOverCanvas && !mouseDragging && !pointerLocked)) {
             return;
         }
@@ -382,9 +457,19 @@ window.onload = function init()
         lastMouseX = event.clientX;
         lastMouseY = event.clientY;
 
-        cameraYaw -= dx * mouseSensitivity;
-        cameraPitch -= dy * mouseSensitivity;
-        cameraPitch = Math.max(-8.0, Math.min(42.0, cameraPitch));
+        dx = Math.max(-40.0, Math.min(40.0, dx));
+        dy = Math.max(-40.0, Math.min(40.0, dy));
+
+        if (cameraMode === "third") {
+            cameraYaw -= dx * mouseSensitivity;
+            cameraPitch -= dy * mouseSensitivity;
+            cameraPitch = Math.max(-8.0, Math.min(42.0, cameraPitch));
+        }
+        else if (cameraMode === "cinematic" && cinematicMode === "free") {
+            cinematicYaw -= dx * mouseSensitivity;
+            cinematicPitch -= dy * mouseSensitivity;
+            cinematicPitch = Math.max(-80.0, Math.min(80.0, cinematicPitch));
+        }
     });
 
     render();
@@ -394,8 +479,10 @@ function isGameKey(code)
 {
     return code === "KeyW" || code === "KeyA" ||
         code === "KeyS" || code === "KeyD" ||
+        code === "KeyQ" || code === "KeyE" ||
         code === "ArrowLeft" || code === "ArrowRight" ||
-        code === "Space" || code === "ShiftLeft" || code === "ShiftRight";
+        code === "Space" || code === "Tab" ||
+        code === "ShiftLeft" || code === "ShiftRight";
 }
 
 function startGame()
@@ -437,18 +524,59 @@ function closeOptions()
     }
 }
 
+function goToTitleScreen()
+{
+    resetPlayerAndBlocks();
+    gameState = "menu";
+    optionReturnState = "menu";
+    keys = {};
+    mouseDragging = false;
+
+    if (document.exitPointerLock && document.pointerLockElement === canvas) {
+        document.exitPointerLock();
+    }
+
+    document.getElementById("OptionsMenu").style.display = "none";
+    document.getElementById("MainMenu").style.display = "flex";
+}
+
 function toggleCameraMode()
 {
     cameraMode = (cameraMode === "third") ? "cinematic" : "third";
     syncCameraModeButtons();
 }
 
+function toggleCinematicMode()
+{
+    cinematicMode = (cinematicMode === "fixed") ? "free" : "fixed";
+    showCameraModePopup(cinematicMode === "fixed" ? "Fixed Camera" : "Free Camera");
+    syncCameraModeButtons();
+}
+
+function showCameraModePopup(message)
+{
+    cameraModePopup.textContent = message;
+    cameraModePopup.style.display = "block";
+    cameraPopupTimer = 60;
+}
+
 function syncCameraModeButtons()
 {
-    var label = cameraMode === "third" ?
-        "Camera Mode: Third Person" : "Camera Mode: Cinematic";
+    var label = cameraMode === "third" ? "Camera Mode: Third Person" :
+        (cinematicMode === "fixed" ? "Camera Mode: Fixed" : "Camera Mode: Free");
     document.getElementById("CameraModeButton").textContent = label;
     document.getElementById("OptionCameraButton").textContent = label;
+}
+
+function updateCameraModePopup()
+{
+    if (cameraPopupTimer <= 0) {
+        cameraModePopup.style.display = "none";
+        return;
+    }
+
+    cameraPopupTimer -= 1;
+    cameraModePopup.style.display = "block";
 }
 
 function syncNameTagButton()
@@ -464,7 +592,7 @@ function updatePlayerNameTag(viewMatrix)
         return;
     }
 
-    var headTop = vec4(playerX, TORSO_HEIGHT + HEAD_HEIGHT + 0.20, playerZ, 1.0);
+    var headTop = vec4(playerX, playerY + TORSO_HEIGHT + HEAD_HEIGHT + 0.20, playerZ, 1.0);
     var eyePoint = mult(viewMatrix, headTop);
     var clipPoint = mult(projectionMatrix, eyePoint);
 
@@ -484,6 +612,34 @@ function updatePlayerNameTag(viewMatrix)
     playerNameTag.style.display = "block";
     playerNameTag.style.left = ((ndcX * 0.5 + 0.5) * canvas.clientWidth) + "px";
     playerNameTag.style.top = ((-ndcY * 0.5 + 0.5) * canvas.clientHeight) + "px";
+}
+
+function tryHitTargetBlock()
+{
+    if (targetBlock.broken) {
+        return;
+    }
+
+    var dx = playerX - targetBlock.x;
+    var dz = playerZ - targetBlock.z;
+    var distance = Math.sqrt(dx * dx + dz * dz);
+
+    if (distance > BLOCK_INTERACTION_DISTANCE) {
+        return;
+    }
+
+    targetBlock.hits += 1;
+
+    if (targetBlock.hits >= BLOCK_BREAK_HITS) {
+        targetBlock.broken = true;
+    }
+}
+
+function resetCinematicCamera()
+{
+    cinematicEye = vec3(5.0, 2.8, 6.2);
+    cinematicYaw = -140.0;
+    cinematicPitch = -16.0;
 }
 
 function createNode(transform, render, sibling, child)
@@ -519,6 +675,7 @@ function initNodes(Id)
     case leftUpperArmId:
         m = translate(-(TORSO_WIDTH * 0.5 + ARM_WIDTH * 0.5), TORSO_HEIGHT, 0.0);
         m = mult(m, rotate(theta[leftUpperArmId], 1, 0, 0));
+        m = mult(m, rotate(armSwingUpperSideAngle, 0, 0, 1));
         figure[leftUpperArmId] = createNode(m, upperArm, rightUpperArmId, leftLowerArmId);
         break;
 
@@ -771,6 +928,8 @@ function updatePose()
     if (!paused) {
         time += 0.035;
         updateMovement();
+        updateFreeCamera();
+        updateJump();
 
         if (autoRotate) {
             cameraYaw += 0.25;
@@ -784,6 +943,8 @@ function updatePose()
     bodyBounce = 0.0;
     bodyPitch = 0.0;
     bodyShiftZ = 0.0;
+    armSwingUpperSideAngle = 0.0;
+    armSwingSideAngle = 0.0;
 
     if (walking && moving) {
         var phase = time * 3.95;
@@ -823,7 +984,7 @@ function updatePose()
     }
 
     if (crouching) {
-        crouchAmount = 0.34;
+        crouchAmount = 0.24;
         bodyShiftZ = -0.22;
         bodyPitch += 22.0;
         theta[leftUpperLegId] += -26.0;
@@ -838,6 +999,147 @@ function updatePose()
     else {
         crouchAmount = 0.0;
     }
+
+    applyJumpPose();
+    applyArmSwing();
+}
+
+function applyJumpPose()
+{
+    if (!jumping) {
+        return;
+    }
+
+    var prep = 0.0;
+    var landing = 0.0;
+    var airborne = 0.0;
+
+    if (jumpFrame < JUMP_PREP_DURATION) {
+        prep = Math.sin((jumpFrame / JUMP_PREP_DURATION) * Math.PI * 0.5);
+    }
+    else {
+        var airProgress = (jumpFrame - JUMP_PREP_DURATION) / JUMP_AIR_DURATION;
+        airborne = Math.sin(airProgress * Math.PI);
+        landing = Math.max(0.0, (airProgress - 0.72) / 0.28);
+    }
+
+    var kneeBend = prep * 22.0 + landing * 6.0;
+
+    bodyBounce -= prep * 0.08;
+    theta[leftUpperLegId] += -kneeBend * 0.45 + airborne * 4.0;
+    theta[rightUpperLegId] += -kneeBend * 0.45 + airborne * 4.0;
+    theta[leftLowerLegId] += kneeBend;
+    theta[rightLowerLegId] += kneeBend;
+    theta[leftFootId] += -12.0 * prep + 3.0 * landing;
+    theta[rightFootId] += -12.0 * prep + 3.0 * landing;
+}
+
+function startArmSwing()
+{
+    armSwingActive = true;
+    armSwingHeld = true;
+    armSwingReturnFrame = 0.0;
+}
+
+function applyArmSwing()
+{
+    if (!armSwingActive) {
+        return;
+    }
+
+    var blend = 1.0;
+    var progress = armSwingFrame / ARM_SWING_DURATION;
+    var sideSwing = Math.sin(progress * Math.PI * 2.0);
+    var chop = 0.5 - 0.5 * Math.cos(progress * Math.PI * 2.0);
+
+    if (!armSwingHeld) {
+        blend = Math.max(0.0, armSwingReturnFrame / ARM_SWING_RETURN_DURATION);
+    }
+
+    theta[leftUpperArmId] = theta[leftUpperArmId] * (1.0 - blend) +
+        ((-50.0 - 3.0 * chop) * blend);
+    theta[leftLowerArmId] = theta[leftLowerArmId] * (1.0 - blend) +
+        ((-5.0 - 24.0 * chop) * blend);
+    armSwingUpperSideAngle = sideSwing * 4.0 * blend;
+    armSwingSideAngle = 0.0;
+
+    if (!paused) {
+        if (armSwingHeld) {
+            armSwingFrame += 1.0;
+
+            if (armSwingFrame >= ARM_SWING_DURATION) {
+                armSwingFrame = 0.0;
+                tryHitTargetBlock();
+            }
+        }
+        else {
+            armSwingReturnFrame -= 1.0;
+
+            if (armSwingReturnFrame <= 0.0) {
+                armSwingFrame = 0.0;
+                armSwingReturnFrame = 0.0;
+                armSwingActive = false;
+            }
+        }
+    }
+}
+
+function startJump()
+{
+    if (jumping || crouching) {
+        return;
+    }
+
+    jumping = true;
+    jumpFrame = 0.0;
+}
+
+function updateJump()
+{
+    if (!jumping) {
+        playerY = 0.0;
+        return;
+    }
+
+    var progress = jumpFrame / JUMP_DURATION;
+
+    if (jumpFrame < JUMP_PREP_DURATION) {
+        playerY = 0.0;
+    }
+    else {
+        var airProgress = (jumpFrame - JUMP_PREP_DURATION) / JUMP_AIR_DURATION;
+        playerY = Math.sin(airProgress * Math.PI) * JUMP_HEIGHT;
+    }
+
+    if (!paused) {
+        jumpFrame += 1.0;
+
+        if (jumpFrame >= JUMP_DURATION) {
+            jumping = false;
+            jumpFrame = 0.0;
+            playerY = 0.0;
+        }
+    }
+}
+
+function resetPlayerAndBlocks()
+{
+    playerX = 0.0;
+    playerY = 0.0;
+    playerZ = 0.0;
+    moving = false;
+    crouching = false;
+    jumping = false;
+    jumpFrame = 0.0;
+    armSwingFrame = 0.0;
+    armSwingActive = false;
+    armSwingHeld = false;
+    armSwingReturnFrame = 0.0;
+    armSwingUpperSideAngle = 0.0;
+    armSwingSideAngle = 0.0;
+    keys = {};
+    targetBlock.hits = 0;
+    targetBlock.broken = false;
 }
 
 function resetPose()
@@ -846,22 +1148,38 @@ function resetPose()
     bodyRotation = 180.0;
     cameraYaw = 180.0;
     cameraPitch = 18.0;
-    cinematicYaw = -140.0;
-    cinematicPitch = -16.0;
+    resetCinematicCamera();
+    cinematicMode = "fixed";
     cameraMode = "third";
     syncCameraModeButtons();
     playerX = 0.0;
+    playerY = 0.0;
     playerZ = 0.0;
     moving = false;
     walking = true;
     crouching = false;
     autoRotate = false;
     paused = false;
+    armSwingFrame = 0.0;
+    armSwingActive = false;
+    armSwingHeld = false;
+    armSwingReturnFrame = 0.0;
+    armSwingUpperSideAngle = 0.0;
+    armSwingSideAngle = 0.0;
+    jumping = false;
+    jumpFrame = 0.0;
+    targetBlock.hits = 0;
+    targetBlock.broken = false;
 }
 
 function updateMovement()
 {
     if (gameState !== "playing") {
+        moving = false;
+        return;
+    }
+
+    if (cameraMode === "cinematic" && cinematicMode === "free") {
         moving = false;
         return;
     }
@@ -897,6 +1215,40 @@ function updateMovement()
     playerZ += moveZ * speed;
 }
 
+function updateFreeCamera()
+{
+    if (gameState !== "playing" || cameraMode !== "cinematic" || cinematicMode !== "free") {
+        return;
+    }
+
+    var x = (keys["KeyA"] ? 1.0 : 0.0) - (keys["KeyD"] ? 1.0 : 0.0);
+    var z = (keys["KeyW"] ? 1.0 : 0.0) - (keys["KeyS"] ? 1.0 : 0.0);
+    var y = (keys["KeyE"] ? 1.0 : 0.0) - (keys["KeyQ"] ? 1.0 : 0.0);
+
+    if (x === 0.0 && y === 0.0 && z === 0.0) {
+        return;
+    }
+
+    var yaw = radians(cinematicYaw);
+    var pitch = radians(cinematicPitch);
+    var forwardX = Math.sin(yaw) * Math.cos(pitch);
+    var forwardY = Math.sin(pitch);
+    var forwardZ = Math.cos(yaw) * Math.cos(pitch);
+    var rightX = Math.cos(yaw);
+    var rightZ = -Math.sin(yaw);
+    var length = Math.sqrt(x * x + y * y + z * z);
+
+    x /= length;
+    y /= length;
+    z /= length;
+
+    cinematicEye = vec3(
+        cinematicEye[0] + (forwardX * z + rightX * x) * freeCameraSpeed,
+        cinematicEye[1] + (forwardY * z + y) * freeCameraSpeed,
+        cinematicEye[2] + (forwardZ * z + rightZ * x) * freeCameraSpeed
+    );
+}
+
 function turnToward(current, target, maxStep)
 {
     current = normalizeAngle(current);
@@ -917,6 +1269,9 @@ function render()
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     updatePose();
+    // --------------------------------------
+    updateCreeper();
+    updateCameraModePopup();
 
     for (var i = 0; i < numNodes; i++) {
         initNodes(i);
@@ -955,10 +1310,22 @@ function render()
 
     modelViewMatrix = lookAt(eye, at, up);
     drawGround();
-    grassBlock(0, -0.294, -3.2);
-    updatePlayerNameTag(modelViewMatrix);
-    modelViewMatrix = mult(modelViewMatrix, translate(playerX, 0.0, playerZ));
-    traverse(torsoId);
+    grassBlock(0, -0.294, -4.8);
+    grassBlock(-1.6, -0.294, -3.2);
+    grassBlock(1.6, -0.294, -3.2);
+
+    if(creeperVisible)
+        creeperModel(creeperX, creeperY, creeperZ);
+
+    if (!targetBlock.broken) {
+        diaBlock(targetBlock.x, targetBlock.y, targetBlock.z);
+    }
+
+    if(!endingTriggered) {
+        updatePlayerNameTag(modelViewMatrix);
+        modelViewMatrix = mult(modelViewMatrix, translate(playerX, playerY, playerZ));
+        traverse(torsoId);
+    }
 
     requestAnimFrame(render);
 }
@@ -1038,8 +1405,8 @@ function grassTile(x, z)
 
 function drawGround()
 {
-    for(var x=-8; x<=8; x+=1.6)
-         for(var z=-8; z<=8; z+=1.6) grassTile(x, z);
+    for(var x=-16; x<=16; x+=1.6)
+         for(var z=-16; z<=16; z+=1.6) grassTile(x, z);
 }
 
 
@@ -1079,7 +1446,6 @@ function grassBlock(x, y, z)
     drawFrontPatch(0.2, 0.2, colors.brownDark, -0.6, -0.4, +0.797); // 옆면-진갈색
     drawFrontPatch(0.2, 0.2, colors.brownDark, -0.2, +0.2, +0.797);
     drawFrontPatch(0.2, 0.2, colors.brownDark, +0.2, 0, +0.797);
-    //drawFrontPatch(0.2, 0.2, colors.eyeWhite, +0.2, +0.2, +0.797);
 
     drawBackPatch(1.6, 0.4, colors.greenGrass, 0, +0.603, +0.797); // 옆면초록
     drawBackPatch(0.2, 0.2, colors.greenGrass, 0.6, +0.2, +0.797);
@@ -1106,7 +1472,6 @@ function grassBlock(x, y, z)
     drawLeftPatch(0.2, 0.2, colors.brownDark, -0.4, -0.6, +0.797); // 옆면-진갈색
     drawLeftPatch(0.2, 0.2, colors.brownDark, +0.2, -0.2, +0.797);
     drawLeftPatch(0.2, 0.2, colors.brownDark, 0, +0.2, +0.797);
-    //drawLeftPatch(0.2, 0.2, colors.eyeBlue, +0.2, +0.2, +0.797);
     
     drawRightPatch(0.4, 1.6, colors.greenGrass, +0.603, 0, +0.797); // 옆면초록
     drawRightPatch(0.2, 0.2, colors.greenGrass, +0.2, 0.6, +0.797);
@@ -1119,8 +1484,127 @@ function grassBlock(x, y, z)
     drawRightPatch(0.2, 0.2, colors.brownDark, -0.4, 0.6, +0.797); // 옆면-진갈색
     drawRightPatch(0.2, 0.2, colors.brownDark, +0.2, 0.2, +0.797);
     drawRightPatch(0.2, 0.2, colors.brownDark, 0, -0.2, +0.797);
-    drawRightPatch(0.2, 0.2, colors.eyeBlue, +0.2, -0.2, +0.797);
 
 
     modelViewMatrix = stack.pop();
+}
+
+
+function diaBlock(x, y, z)
+{
+    stack.push(modelViewMatrix);
+
+    modelViewMatrix =
+        mult(modelViewMatrix,
+             translate(x, y, z));
+    
+
+    drawBlock(1.6, 1.597, 1.597, colors.brownGrey, 0, 0, 0);
+    // drawTopPatch(1.6, 1.6, colors.brownGrey, 0, 0, 0.797);
+
+    drawTopPatch(0.2, 0.2, colors.greyDark, -0.6, -0.6, 0.7985); // 짙은 회색
+    drawTopPatch(0.2, 0.2, colors.greyDark, 0.4, -0.6, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.greyDark, 0.6, -0.2, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.greyDark, 0.6, 0, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.greyDark, -0.4, 0.2, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.greyDark, -0.2, 0.6, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.blueLight, 0, -0.6, 0.7985); // 밝은 파랑
+    drawTopPatch(0.2, 0.2, colors.blueLight, 0.4, 0.6, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.blueDia, 0.2, -0.6, 0.7985); // 기본 파랑
+    drawTopPatch(0.2, 0.2, colors.blueDia, 0.4, -0.4, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.blueDia, 0, 0, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.blueDia, -0.6, 0.2, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.blueDia, 0.2, 0.6, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.blueDark, 0.2, -0.4, 0.7985); // 짙은 파랑
+    drawTopPatch(0.2, 0.2, colors.blueDark, -0.6, 0, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.blueDark, -0.4, 0, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.blueDark, 0.4, 0.4, 0.7985);
+    drawTopPatch(0.2, 0.2, colors.blueDark, 0.6, 0.6, 0.7985);
+
+
+    // drawFrontPatch(1.6, 1.6, colors.greyDark, -0.6, 0.6, 0.797);
+    drawFrontPatch(0.2, 0.2, colors.greyDark, -0.6, 0.6, 0.7985); // 짙은 회색
+    drawFrontPatch(0.2, 0.2, colors.greyDark, 0.4, 0.6, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.greyDark, 0.6, 0.2, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.greyDark, 0.6, 0, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.greyDark, -0.4, -0.2, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.greyDark, -0.2, -0.6, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.blueLight, 0, 0.6, 0.7985); // 밝은 파랑
+    drawFrontPatch(0.2, 0.2, colors.blueLight, 0.4, -0.6, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.blueDia, 0.2, 0.6, 0.7985); // 기본 파랑
+    drawFrontPatch(0.2, 0.2, colors.blueDia, 0.4, 0.4, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.blueDia, 0, 0, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.blueDia, -0.6, -0.2, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.blueDia, 0.2, -0.6, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.blueDark, 0.2, 0.4, 0.7985); // 짙은 파랑
+    drawFrontPatch(0.2, 0.2, colors.blueDark, -0.6, 0, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.blueDark, -0.4, 0, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.blueDark, 0.4, -0.4, 0.7985);
+    drawFrontPatch(0.2, 0.2, colors.blueDark, 0.6, -0.6, 0.7985);
+
+
+    modelViewMatrix = stack.pop();
+}
+
+
+function creeperModel(x, y, z)
+{
+    stack.push(modelViewMatrix);
+
+    modelViewMatrix = mult(modelViewMatrix, translate(x, y, z));
+    modelViewMatrix = mult(modelViewMatrix,rotateY(creeperYaw * 180.0 / Math.PI + 180.0));
+
+    drawBlock(0.96, 0.96, 0.96, colors.creeperGreen, 0, 0, 0); // 머리
+    drawBlock(0.96, 1.44, 0.48, colors.creeperGreen, 0, -1.2, 0); // 몸통
+    drawBlock(0.96, 0.72, 0.48, colors.creeperGreen, 0, -2.28, 0.48); // 다리
+    drawBlock(0.96, 0.72, 0.48, colors.creeperGreen, 0, -2.28, -0.48); // 다리(중앙 방향 = 앞면)
+    drawBackPatch(0.24, 0.24, vec4(0, 0, 0, 1.0), -0.24, 0.12, 0.48);
+    drawBackPatch(0.24, 0.24, vec4(0, 0, 0, 1.0), 0.24, 0.12, 0.48);
+    drawBackPatch(0.24, 0.24, vec4(0, 0, 0, 1.0), 0, -0.24, 0.48);
+
+    /*
+    function drawBackPatch(width, height, color, x, y, z)
+{
+    drawBlock(width, height, FRONT_PATCH_DEPTH, color,
+        x, y, -z - 0.5 * FRONT_PATCH_DEPTH);
+}
+    */
+
+    modelViewMatrix = stack.pop();
+}
+
+function updateCreeper()
+{
+    if (!creeperVisible || endingTriggered)
+        return;
+
+    var dx = playerX - creeperX;
+    var dz = playerZ - creeperZ;
+    
+    var dist = Math.sqrt(dx * dx + dz * dz);
+
+    if(dist > 0.001) {
+        creeperYaw = Math.atan2(dx, dz);
+        creeperX += dx / dist * creeperSpeed;
+        creeperZ += dz / dist * creeperSpeed;
+    }
+
+    if(dist < 2.5) {
+        triggerEnding();
+    }
+
+}
+
+function triggerEnding()
+{
+    endingTriggered = true;
+
+    creeperVisible = false;
+
+    gameState = "ending";
+
+    alert(
+        "ENDING\n\n" +
+        "Steve was caught."
+    );
 }
