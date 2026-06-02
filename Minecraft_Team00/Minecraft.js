@@ -95,7 +95,7 @@ var bodyShiftZ = 0.0;
 var playerX = 0.0;
 var playerY = 0.0;
 var playerZ = 0.0;
-var moveSpeed = 0.055;
+var moveSpeed = 0.040;
 var moving = false;
 var keys = {};
 var jumping = false;
@@ -173,6 +173,8 @@ var STEVE_FALL_DELAY = 30.0;
 var steveFallen = false;
 var delayedExplosionBreakPending = false;
 var endingTriggered = false;
+var gameSounds = {};
+var soundsReady = false;
 
 // 색상만 요청하신 사항에 맞춰 수정되었습니다.
 var colors = {
@@ -226,6 +228,95 @@ var colors = {
     leavesLight: vec4(0.20, 0.52, 0.20, 1.0),
     leavesDark: vec4(0.08, 0.28, 0.10, 1.0)
 };
+
+function initSounds()
+{
+    if (soundsReady) {
+        return;
+    }
+
+    gameSounds.walk = new Audio("sounds/walk.mp3");
+    gameSounds.jump = new Audio("sounds/jump.mp3");
+    gameSounds.mining = new Audio("sounds/mining.mp3");
+    gameSounds.blockPop = new Audio("sounds/get_block_pop.mp3");
+    gameSounds.click = new Audio("sounds/click.mp3");
+    gameSounds.creeperFuse = new Audio("sounds/creeper_before_explosion.mp3");
+    gameSounds.creeperExplosion = new Audio("sounds/creeper_explosion.mp3");
+
+    gameSounds.walk.loop = true;
+    gameSounds.creeperFuse.loop = true;
+
+    gameSounds.walk.volume = 0.24;
+    gameSounds.jump.volume = 0.42;
+    gameSounds.mining.volume = 0.48;
+    gameSounds.blockPop.volume = 0.45;
+    gameSounds.click.volume = 0.35;
+    gameSounds.creeperFuse.volume = 0.38;
+    gameSounds.creeperExplosion.volume = 0.58;
+
+    soundsReady = true;
+}
+
+function playSound(name)
+{
+    initSounds();
+
+    var sound = gameSounds[name];
+    if (!sound) {
+        return;
+    }
+
+    sound.currentTime = 0.0;
+    var playResult = sound.play();
+    if (playResult && playResult.catch) {
+        playResult.catch(function () {});
+    }
+}
+
+function playLoopingSound(name)
+{
+    initSounds();
+
+    var sound = gameSounds[name];
+    if (!sound || !sound.paused) {
+        return;
+    }
+
+    var playResult = sound.play();
+    if (playResult && playResult.catch) {
+        playResult.catch(function () {});
+    }
+}
+
+function stopSound(name)
+{
+    var sound = gameSounds[name];
+    if (!sound) {
+        return;
+    }
+
+    sound.pause();
+    sound.currentTime = 0.0;
+}
+
+function stopAllSounds()
+{
+    stopSound("walk");
+    stopSound("mining");
+    stopSound("creeperFuse");
+    stopSound("creeperExplosion");
+}
+
+function syncWalkingSound()
+{
+    if (gameState === "playing" && !paused && walking && moving && !steveFallen &&
+        !(cameraMode === "cinematic" && cinematicMode === "free")) {
+        playLoopingSound("walk");
+    }
+    else {
+        stopSound("walk");
+    }
+}
 
 var vertices = [
     vec4(-0.5, -0.5,  0.5, 1.0),
@@ -290,36 +381,12 @@ window.onload = function init()
     gl.uniform4fv(lightPositionLoc, flatten(vec4(2.0, 4.0, 3.0, 0.0)));
     window.addEventListener("resize", resizeCanvas);
 
-    document.getElementById("WalkButton").onclick = function () {
-        walking = !walking;
-    };
-
-    document.getElementById("CrouchButton").onclick = function () {
-        crouching = !crouching;
-    };
-
     document.getElementById("RotateButton").onclick = function () {
         autoRotate = !autoRotate;
     };
 
     document.getElementById("CameraModeButton").onclick = function () {
         toggleCameraMode();
-    };
-
-    document.getElementById("CineLeftButton").onclick = function () {
-        cinematicYaw -= 10.0;
-    };
-
-    document.getElementById("CineRightButton").onclick = function () {
-        cinematicYaw += 10.0;
-    };
-
-    document.getElementById("CineUpButton").onclick = function () {
-        cinematicPitch = Math.min(20.0, cinematicPitch + 6.0);
-    };
-
-    document.getElementById("CineDownButton").onclick = function () {
-        cinematicPitch = Math.max(-45.0, cinematicPitch - 6.0);
     };
 
     document.getElementById("CineResetButton").onclick = function () {
@@ -336,10 +403,6 @@ window.onload = function init()
 
     document.getElementById("DevToggleButton").onclick = function () {
         toggleBottomToolPanel("DevPanel");
-    };
-
-    document.getElementById("NightModeButton").onclick = function () {
-        toggleNightMode();
     };
 
     document.getElementById("SpawnCreeperButton").onclick = function () {
@@ -418,6 +481,20 @@ window.onload = function init()
     document.getElementById("OptionBackButton").onclick = function () {
         closeOptions();
     };
+
+    document.addEventListener("click", function (event) {
+        if (!event.target || event.target.tagName !== "BUTTON" || event.target.disabled) {
+            return;
+        }
+
+        if (event.target.id === "GuideToggleButton" ||
+            event.target.id === "DevToggleButton" ||
+            event.target.closest("#DevPanel")) {
+            return;
+        }
+
+        playSound("click");
+    });
 
     window.addEventListener("keydown", function (event) {
         if (event.code === "Escape") {
@@ -578,6 +655,7 @@ function isGameKey(code)
 
 function startGame()
 {
+    initSounds();
     resetPose();
     gameState = "playing";
     keys = {};
@@ -591,6 +669,8 @@ function openOptions(returnState)
     gameState = "options";
     keys = {};
     mouseDragging = false;
+    stopSound("walk");
+    stopSound("creeperFuse");
 
     if (document.exitPointerLock && document.pointerLockElement === canvas) {
         document.exitPointerLock();
@@ -615,6 +695,9 @@ function closeOptions()
     if (gameState === "menu") {
         document.getElementById("MainMenu").style.display = "flex";
     }
+    else if (creeperFuseActive) {
+        playLoopingSound("creeperFuse");
+    }
 }
 
 function toggleBottomToolPanel(panelId)
@@ -635,6 +718,7 @@ function toggleBottomToolPanel(panelId)
 function goToTitleScreen()
 {
     resetPlayerAndBlocks();
+    stopAllSounds();
     gameState = "menu";
     optionReturnState = "menu";
     keys = {};
@@ -702,8 +786,6 @@ function syncNameTagButton()
 
 function syncNightModeButton()
 {
-    document.getElementById("NightModeButton").textContent =
-        nightMode ? "Night Mode: On" : "Night Mode: Off";
     document.getElementById("OptionNightButton").textContent =
         nightMode ? "Night Mode: On" : "Night Mode: Off";
     syncCreeperSpawnButton();
@@ -822,9 +904,11 @@ function tryHitTargetBlock()
     }
 
     targetBlock.hits += 1;
+    playSound("mining");
 
     if (targetBlock.hits >= BLOCK_BREAK_HITS) {
         targetBlock.broken = true;
+        playSound("blockPop");
     }
 }
 
@@ -1125,6 +1209,7 @@ function updatePose()
         time += 0.035 * frameScale;
         updateMovement();
         updateFreeCamera();
+        syncWalkingSound();
         updateJump();
 
         if (autoRotate) {
@@ -1143,7 +1228,7 @@ function updatePose()
     armSwingSideAngle = 0.0;
 
     if (walking && moving) {
-        var phase = time * 3.95;
+        var phase = time * 3.35;
         var hipSwing = Math.sin(phase);
         var oppositeHipSwing = Math.sin(phase + Math.PI);
         var armSwing = Math.sin(phase + 0.12);
@@ -1288,6 +1373,7 @@ function startJump()
 
     jumping = true;
     jumpFrame = 0.0;
+    playSound("jump");
 }
 
 function updateJump()
@@ -1326,6 +1412,7 @@ function resetPlayerAndBlocks()
 
 function resetPlayerOnly()
 {
+    stopAllSounds();
     playerX = 0.0;
     playerY = 0.0;
     playerZ = 0.0;
@@ -1365,6 +1452,7 @@ function resetBreakableBlocks()
 
 function resetPose()
 {
+    stopAllSounds();
     time = 0.0;
     bodyRotation = 180.0;
     cameraYaw = 180.0;
@@ -1381,6 +1469,8 @@ function resetPose()
     crouching = false;
     autoRotate = false;
     paused = false;
+    nightMode = false;
+    syncNightModeButton();
     armSwingFrame = 0.0;
     armSwingActive = false;
     armSwingHeld = false;
@@ -2070,6 +2160,7 @@ function updateCreeper()
         if (dist > 3.4) {
             creeperFuseActive = false;
             creeperFuseFrame = 0.0;
+            stopSound("creeperFuse");
         }
         else if (creeperFuseFrame >= CREEPER_FUSE_DURATION) {
             triggerCreeperExplosion();
@@ -2086,11 +2177,15 @@ function updateCreeper()
     if (dist < 2.5) {
         creeperFuseActive = true;
         creeperFuseFrame = 0.0;
+        playLoopingSound("creeperFuse");
     }
 }
 
 function triggerCreeperExplosion()
 {
+    stopSound("creeperFuse");
+    stopSound("walk");
+    playSound("creeperExplosion");
     endingTriggered = true;
     creeperVisible = false;
     creeperFuseActive = false;
