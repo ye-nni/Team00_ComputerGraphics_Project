@@ -134,7 +134,6 @@ var armSwingActive = false;
 var armSwingHeld = false;
 var armSwingReturnFrame = 0.0;
 var armSwingUpperSideAngle = 0.0;
-var armSwingSideAngle = 0.0;
 var ARM_SWING_DURATION = 16.0;
 var ARM_SWING_RETURN_DURATION = 8.0;
 var targetBlock = {
@@ -1216,7 +1215,6 @@ function updatePose()
     bodyPitch = 0.0;
     bodyShiftZ = 0.0;
     armSwingUpperSideAngle = 0.0;
-    armSwingSideAngle = 0.0;
 
     if (walking && moving) {
         var phase = time * 3.35;
@@ -1333,7 +1331,6 @@ function applyArmSwing()
     theta[leftLowerArmId] = theta[leftLowerArmId] * (1.0 - blend) +
         ((-5.0 - 24.0 * chop) * blend);
     armSwingUpperSideAngle = sideSwing * 3.2 * blend;
-    armSwingSideAngle = 0.0;
 
     if (!paused) {
         if (armSwingHeld) {
@@ -1373,8 +1370,6 @@ function updateJump()
         playerY = 0.0;
         return;
     }
-
-    var progress = jumpFrame / JUMP_DURATION;
 
     if (jumpFrame < JUMP_PREP_DURATION) {
         playerY = 0.0;
@@ -1416,7 +1411,6 @@ function resetPlayerOnly()
     armSwingHeld = false;
     armSwingReturnFrame = 0.0;
     armSwingUpperSideAngle = 0.0;
-    armSwingSideAngle = 0.0;
     keys = {};
     creeperVisible = false;
     creeperX = -16.0;
@@ -1467,7 +1461,6 @@ function resetPose()
     armSwingHeld = false;
     armSwingReturnFrame = 0.0;
     armSwingUpperSideAngle = 0.0;
-    armSwingSideAngle = 0.0;
     jumping = false;
     jumpFrame = 0.0;
     targetBlock.hits = 0;
@@ -1569,15 +1562,6 @@ function updateFreeCamera()
         cinematicEye[1] + (forwardY * z + y) * freeCameraSpeed * frameScale,
         cinematicEye[2] + (forwardZ * z + rightZ * x) * freeCameraSpeed * frameScale
     );
-}
-
-function turnToward(current, target, maxStep)
-{
-    current = normalizeAngle(current);
-    target = normalizeAngle(target);
-    var diff = normalizeAngle(target - current + 180.0) - 180.0;
-    diff = Math.max(-maxStep, Math.min(maxStep, diff));
-    return normalizeAngle(current + diff);
 }
 
 function normalizeAngle(angle)
