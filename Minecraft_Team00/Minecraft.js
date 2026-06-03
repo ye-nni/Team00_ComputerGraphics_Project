@@ -175,15 +175,13 @@ var delayedExplosionBreakPending = false;
 var endingTriggered = false;
 var gameSounds = {};
 var soundsReady = false;
-
-// 색상만 요청하신 사항에 맞춰 수정되었습니다.
 var colors = {
     skin: vec4(0.63, 0.46, 0.36, 1.0),
     skinLight: vec4(0.72, 0.53, 0.42, 1.0),
     skinDark: vec4(0.48, 0.32, 0.25, 1.0),
     hair: vec4(0.15, 0.09, 0.03, 1.0),
     hairLight: vec4(0.26, 0.15, 0.06, 1.0),
-    beard: vec4(0.18, 0.10, 0.04, 1.0), // 진한 갈색
+    beard: vec4(0.18, 0.10, 0.04, 1.0), 
     shirt: vec4(0.00, 0.62, 0.65, 1.0),
     shirtLight: vec4(0.04, 0.72, 0.73, 1.0),
     shirtDark: vec4(0.00, 0.46, 0.50, 1.0),
@@ -192,9 +190,9 @@ var colors = {
     pantsDark: vec4(0.13, 0.12, 0.46, 1.0),
     shoe: vec4(0.19, 0.19, 0.20, 1.0),
     eyeWhite: vec4(0.88, 0.90, 0.94, 1.0),
-    eyeBlue: vec4(0.35, 0.25, 0.65, 1.0), // 파란색에 가까운 보라색
-    mouth: vec4(0.70, 0.45, 0.40, 1.0), // 핑크색과 갈색 사이
-    nose: vec4(0.55, 0.38, 0.28, 1.0), // 코를 위한 연한 갈색 추가
+    eyeBlue: vec4(0.35, 0.25, 0.65, 1.0), 
+    mouth: vec4(0.70, 0.45, 0.40, 1.0), 
+    nose: vec4(0.55, 0.38, 0.28, 1.0), 
 
     greenGrass: vec4(0.30, 0.44, 0.26, 1.0),
     greenLight: vec4(0.34, 0.50, 0.30, 1.0),
@@ -1043,7 +1041,6 @@ function traverse(Id)
     }
 }
 
-// 아래의 토르소, 팔, 다리는 올려주신 원본 코드와 100% 동일하게 복구했습니다.
 function torso()
 {
     drawBlock(TORSO_WIDTH, TORSO_HEIGHT, TORSO_DEPTH, colors.shirt,
@@ -1066,10 +1063,9 @@ function head()
     drawBlock(HEAD_WIDTH, HEAD_HEIGHT, HEAD_DEPTH, colors.skin,
         0.0, 0.5 * HEAD_HEIGHT, 0.0);
 
-    // 1. 머리카락: 이마를 더 덮도록 높이를 조절하여 탈모 방지
     drawTopPatch(HEAD_WIDTH, HEAD_DEPTH, colors.hair,
         0.0, 0.0, HEAD_HEIGHT);
-    drawFrontPatch(HEAD_WIDTH, 0.24, colors.hair, // 앞머리 길이를 늘려 이마를 덮음
+    drawFrontPatch(HEAD_WIDTH, 0.24, colors.hair, 
         0.0, HEAD_HEIGHT - 0.12, 0.5 * HEAD_DEPTH);
     drawBackPatch(HEAD_WIDTH, 0.50, colors.hair,
         0.0, HEAD_HEIGHT - 0.25, 0.5 * HEAD_DEPTH);
@@ -1083,7 +1079,6 @@ function head()
     drawFrontPatch(0.055, 0.176, colors.hair,
         0.34, 0.442, 0.5 * HEAD_DEPTH);
 
-    // 2 & 3. 눈: 위치를 코에 가깝게 내림 (eyeY = 0.32), 보라색에 가까운 파란색 적용
     var eyeY = 0.32;
     drawFrontPatch(0.09, 0.09, colors.eyeWhite,
         -0.22, eyeY, 0.5 * HEAD_DEPTH);
@@ -1094,21 +1089,18 @@ function head()
     drawFrontPatch(0.09, 0.09, colors.eyeWhite,
         0.22, eyeY, 0.5 * HEAD_DEPTH);
 
-    // 4. 코: 연한 갈색으로 눈 바로 아래에 배치
     drawFrontPatch(0.18, 0.09, colors.nose,
         0.0, 0.23, 0.5 * HEAD_DEPTH);
 
-    // 입: 핑크색과 갈색 사이 (코 바로 아래)
     drawFrontPatch(0.18, 0.09, colors.mouth,
         0.0, 0.14, 0.5 * HEAD_DEPTH);
 
-    // 수염: 진한 갈색 (입 양옆과 아랫부분)
     drawFrontPatch(0.09, 0.09, colors.beard,
-        -0.135, 0.14, 0.5 * HEAD_DEPTH); // 왼쪽 입가 수염
+        -0.135, 0.14, 0.5 * HEAD_DEPTH); 
     drawFrontPatch(0.09, 0.09, colors.beard,
-        0.135, 0.14, 0.5 * HEAD_DEPTH);  // 오른쪽 입가 수염
+        0.135, 0.14, 0.5 * HEAD_DEPTH); 
     drawFrontPatch(0.36, 0.09, colors.beard,
-        0.0, 0.05, 0.5 * HEAD_DEPTH);    // 턱수염
+        0.0, 0.05, 0.5 * HEAD_DEPTH);  
 }
 
 function upperArm()
@@ -1202,7 +1194,6 @@ function drawTopPatch(width, depth, color, x, z, y)
         x, y + 0.5 * TOP_PATCH_HEIGHT, z);
 }
 
-// 애니메이션 로직 원본 100% 유지
 function updatePose()
 {
     if (!paused) {
@@ -1797,17 +1788,16 @@ function scale4(a, b, c)
 function grassTile(x, z)
 {
     var y = -1.897;
-    drawBlock(1.6, 1.594, 1.6, colors.brownSoil, x, y, z); // 흙 블록
-    drawTopPatch(1.6, 1.6, colors.greenGrass, x, z, y+0.797); // 기본 초록
+    drawBlock(1.6, 1.594, 1.6, colors.brownSoil, x, y, z); 
+    drawTopPatch(1.6, 1.6, colors.greenGrass, x, z, y+0.797); 
 
-    drawTopPatch(0.2, 0.2, colors.greenLight, x+0.6, z-0.6, y+0.8); // 초록 무늬
-    drawTopPatch(0.2, 0.2, colors.greenLight, x, z+0.4, y+0.8); // 초록 무늬
-    drawTopPatch(0.2, 0.2, colors.greenLight, x-0.2, z+0.2, y+0.8); // 초록 무늬
-    drawTopPatch(0.2, 0.2, colors.greenLight, x-0.6, z-0.4, y+0.8); // 초록 무늬
+    drawTopPatch(0.2, 0.2, colors.greenLight, x+0.6, z-0.6, y+0.8); 
+    drawTopPatch(0.2, 0.2, colors.greenLight, x, z+0.4, y+0.8); 
+    drawTopPatch(0.2, 0.2, colors.greenLight, x-0.2, z+0.2, y+0.8); 
+    drawTopPatch(0.2, 0.2, colors.greenLight, x-0.6, z-0.4, y+0.8); 
 
-    drawTopPatch(0.2, 0.2, colors.greenDark, x+0.4, z, y+0.8); // 초록 무늬
-    drawTopPatch(0.2, 0.2, colors.greenDark, x-0.2, z-0.6, y+0.8); // 초록 무늬
-    // width, depth, color, x, z, y
+    drawTopPatch(0.2, 0.2, colors.greenDark, x+0.4, z, y+0.8); 
+    drawTopPatch(0.2, 0.2, colors.greenDark, x-0.2, z-0.6, y+0.8); 
 }
 
 function drawGround()
@@ -1841,6 +1831,14 @@ function resetWorldBlocks()
 
 function breakBlocksNearExplosion()
 {
+    var targetDx = targetBlock.x - explosionX;
+    var targetDz = targetBlock.z - explosionZ;
+    var targetDistance = Math.sqrt(targetDx * targetDx + targetDz * targetDz);
+
+    if (targetDistance <= explosionBreakRadius) {
+        targetBlock.broken = true;
+    }
+
     for (var i = 0; i < worldBlocks.length; i++) {
         var explosionDx = worldBlocks[i].x - explosionX;
         var explosionDz = worldBlocks[i].z - explosionZ;
@@ -1947,75 +1945,66 @@ function grassBlock(x, y, z)
         mult(modelViewMatrix,
              translate(x, y, z));
 
-
-    // 여기부터는 모두 로컬 좌표
     drawBlock(1.594, 1.594, 1.594, colors.brownSoil, 0, 0, 0);
-    drawTopPatch(1.6, 1.6, colors.greenGrass, 0, 0, 0.797); // 기본 초록
+    drawTopPatch(1.6, 1.6, colors.greenGrass, 0, 0, 0.797); 
 
-    drawTopPatch(0.2, 0.2, colors.greenLight, 0.6, -0.6, +0.8); // 초록 무늬
-    drawTopPatch(0.2, 0.2, colors.greenLight, 0, +0.4, +0.8); // 초록 무늬
-    drawTopPatch(0.2, 0.2, colors.greenLight, -0.2, +0.2, +0.8); // 초록 무늬
-    drawTopPatch(0.2, 0.2, colors.greenLight, -0.6, -0.4, +0.8); // 초록 무늬
+    drawTopPatch(0.2, 0.2, colors.greenLight, 0.6, -0.6, +0.8); 
+    drawTopPatch(0.2, 0.2, colors.greenLight, 0, +0.4, +0.8); 
+    drawTopPatch(0.2, 0.2, colors.greenLight, -0.2, +0.2, +0.8); 
+    drawTopPatch(0.2, 0.2, colors.greenLight, -0.6, -0.4, +0.8); 
     
-    drawTopPatch(0.2, 0.2, colors.greenDark, +0.4, 0, +0.8); // 초록 무늬
-    drawTopPatch(0.2, 0.2, colors.greenDark, +0.4, +0.3, +0.8); // 초록 무늬
-    drawTopPatch(0.2, 0.2, colors.greenDark, -0.2, -0.6, +0.8); // 초록 무늬
-    drawTopPatch(0.2, 0.2, colors.greenDark, -0.4, +0.6, +0.8); // 초록 무늬
+    drawTopPatch(0.2, 0.2, colors.greenDark, +0.4, 0, +0.8); 
+    drawTopPatch(0.2, 0.2, colors.greenDark, +0.4, +0.3, +0.8);
+    drawTopPatch(0.2, 0.2, colors.greenDark, -0.2, -0.6, +0.8);
+    drawTopPatch(0.2, 0.2, colors.greenDark, -0.4, +0.6, +0.8);
 
-
-    // 스티브 정면
-    drawFrontPatch(1.6, 0.4, colors.greenGrass, 0, +0.603, +0.797); // 옆면초록
+    drawFrontPatch(1.6, 0.4, colors.greenGrass, 0, +0.603, +0.797);
     drawFrontPatch(0.2, 0.2, colors.greenGrass, -0.6, +0.2, +0.797);
     drawFrontPatch(0.2, 0.2, colors.greenGrass, +0.4, +0.2, +0.797);
-    drawFrontPatch(0.2, 0.2, colors.brownGrey, +0.6, +0.2, +0.797); // 옆면회색
+    drawFrontPatch(0.2, 0.2, colors.brownGrey, +0.6, +0.2, +0.797);
     drawFrontPatch(0.2, 0.2, colors.brownGrey, -0.4, -0.6, +0.797);
-    drawFrontPatch(0.2, 0.2, colors.brownLight, -0.4, 0, +0.797); // 옆면-연갈색
+    drawFrontPatch(0.2, 0.2, colors.brownLight, -0.4, 0, +0.797);
     drawFrontPatch(0.2, 0.2, colors.brownLight, 0, -0.2, +0.797);
     drawFrontPatch(0.2, 0.2, colors.brownLight, +0.4, -0.4, +0.797);
-    drawFrontPatch(0.2, 0.2, colors.brownDark, -0.6, -0.4, +0.797); // 옆면-진갈색
+    drawFrontPatch(0.2, 0.2, colors.brownDark, -0.6, -0.4, +0.797);
     drawFrontPatch(0.2, 0.2, colors.brownDark, -0.2, +0.2, +0.797);
     drawFrontPatch(0.2, 0.2, colors.brownDark, +0.2, 0, +0.797);
-    //drawFrontPatch(0.2, 0.2, colors.eyeWhite, +0.2, +0.2, +0.797);
 
-    drawBackPatch(1.6, 0.4, colors.greenGrass, 0, +0.603, +0.797); // 옆면초록
+    drawBackPatch(1.6, 0.4, colors.greenGrass, 0, +0.603, +0.797); 
     drawBackPatch(0.2, 0.2, colors.greenGrass, 0.6, +0.2, +0.797);
     drawBackPatch(0.2, 0.2, colors.greenGrass, -0.4, +0.2, +0.797);
-    drawBackPatch(0.2, 0.2, colors.brownGrey, -0.6, +0.2, +0.797); // 옆면회색
+    drawBackPatch(0.2, 0.2, colors.brownGrey, -0.6, +0.2, +0.797); 
     drawBackPatch(0.2, 0.2, colors.brownGrey, 0.4, -0.6, +0.797);
-    drawBackPatch(0.2, 0.2, colors.brownLight, 0.4, 0, +0.797); // 옆면-연갈색
+    drawBackPatch(0.2, 0.2, colors.brownLight, 0.4, 0, +0.797);
     drawBackPatch(0.2, 0.2, colors.brownLight, 0, -0.2, +0.797);
     drawBackPatch(0.2, 0.2, colors.brownLight, -0.4, -0.4, +0.797);
-    drawBackPatch(0.2, 0.2, colors.brownDark, 0.6, -0.4, +0.797); // 옆면-진갈색
+    drawBackPatch(0.2, 0.2, colors.brownDark, 0.6, -0.4, +0.797);
     drawBackPatch(0.2, 0.2, colors.brownDark, 0.2, +0.2, +0.797);
     drawBackPatch(0.2, 0.2, colors.brownDark, -0.2, 0, +0.797);
 
-
-    //스티브 왼팔쪽
-    drawLeftPatch(0.4, 1.6, colors.greenGrass, +0.603, 0, +0.797); // 옆면초록
+    drawLeftPatch(0.4, 1.6, colors.greenGrass, +0.603, 0, +0.797);
     drawLeftPatch(0.2, 0.2, colors.greenGrass, +0.2, -0.6, +0.797);
     drawLeftPatch(0.2, 0.2, colors.greenGrass, +0.2, +0.4, +0.797);
-    drawLeftPatch(0.2, 0.2, colors.brownGrey, -0.6, -0.4, +0.797); // 옆면회색
+    drawLeftPatch(0.2, 0.2, colors.brownGrey, -0.6, -0.4, +0.797);
     drawLeftPatch(0.2, 0.2, colors.brownGrey, +0.2, +0.6, +0.797);
-    drawLeftPatch(0.2, 0.2, colors.brownLight, 0, -0.4, +0.797); // 옆면-연갈색
+    drawLeftPatch(0.2, 0.2, colors.brownLight, 0, -0.4, +0.797);
     drawLeftPatch(0.2, 0.2, colors.brownLight, -0.2, 0, +0.797);
     drawLeftPatch(0.2, 0.2, colors.brownLight, -0.4, +0.4, +0.797);
-    drawLeftPatch(0.2, 0.2, colors.brownDark, -0.4, -0.6, +0.797); // 옆면-진갈색
+    drawLeftPatch(0.2, 0.2, colors.brownDark, -0.4, -0.6, +0.797);
     drawLeftPatch(0.2, 0.2, colors.brownDark, +0.2, -0.2, +0.797);
     drawLeftPatch(0.2, 0.2, colors.brownDark, 0, +0.2, +0.797);
-    //drawLeftPatch(0.2, 0.2, colors.eyeBlue, +0.2, +0.2, +0.797);
     
-    drawRightPatch(0.4, 1.6, colors.greenGrass, +0.603, 0, +0.797); // 옆면초록
+    drawRightPatch(0.4, 1.6, colors.greenGrass, +0.603, 0, +0.797); 
     drawRightPatch(0.2, 0.2, colors.greenGrass, +0.2, 0.6, +0.797);
     drawRightPatch(0.2, 0.2, colors.greenGrass, +0.2, -0.4, +0.797);
-    drawRightPatch(0.2, 0.2, colors.brownGrey, -0.6, 0.4, +0.797); // 옆면회색
+    drawRightPatch(0.2, 0.2, colors.brownGrey, -0.6, 0.4, +0.797);
     drawRightPatch(0.2, 0.2, colors.brownGrey, +0.2, -0.6, +0.797);
-    drawRightPatch(0.2, 0.2, colors.brownLight, 0, 0.4, +0.797); // 옆면-연갈색
+    drawRightPatch(0.2, 0.2, colors.brownLight, 0, 0.4, +0.797); 
     drawRightPatch(0.2, 0.2, colors.brownLight, -0.2, 0, +0.797);
     drawRightPatch(0.2, 0.2, colors.brownLight, -0.4, -0.4, +0.797);
-    drawRightPatch(0.2, 0.2, colors.brownDark, -0.4, 0.6, +0.797); // 옆면-진갈색
+    drawRightPatch(0.2, 0.2, colors.brownDark, -0.4, 0.6, +0.797);
     drawRightPatch(0.2, 0.2, colors.brownDark, +0.2, 0.2, +0.797);
     drawRightPatch(0.2, 0.2, colors.brownDark, 0, -0.2, +0.797);
-    drawRightPatch(0.2, 0.2, colors.eyeBlue, +0.2, -0.2, +0.797);
 
 
     modelViewMatrix = stack.pop();
@@ -2215,7 +2204,6 @@ function updateSteveFallDelay()
     if (steveFallDelayFrame <= 0.0) {
         steveFallen = true;
         if (delayedExplosionBreakPending) {
-            targetBlock.broken = true;
             breakBlocksNearExplosion();
             delayedExplosionBreakPending = false;
         }
